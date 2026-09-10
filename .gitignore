@@ -3,6 +3,16 @@ dist
 dist-ssr
 *.local
 .DS_Store
+
+# Secrets / local env — never commit real keys
+.env
+.env.*
+!.env.example
+
+# Supabase CLI local state
+supabase/.branches
+supabase/.temp
+supabase/.env
 .vscode/*
 !.vscode/extensions.json
 .claude/
