@@ -11,8 +11,11 @@ import ScheduleInterviewModal from '../../components/workflow/ScheduleInterviewM
 import InterviewResultModal from '../../components/workflow/InterviewResultModal.jsx';
 import OfferDrawer from '../../components/workflow/OfferDrawer.jsx';
 import { useApp } from '../../context/AppContext.jsx';
+import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { findJob } from '../../data/jobs.js';
+import { getApplication, getApplicationEvents, decideApplication, startReview as startReviewApi } from '../../api/applications.js';
+import { applicationFromDb } from '../../api/mappers.js';
 import {
   APP_STATUS,
   ROUND_STATUS,
@@ -47,10 +50,36 @@ const DOC_STAGES = [
   APP_STATUS.HR_VERIFICATION, APP_STATUS.HR_VERIFICATION_REJECTED, APP_STATUS.JOINING_PENDING, APP_STATUS.EMPLOYEE,
 ];
 
+/* Database application + timeline -> the shape this page renders. */
+function adaptRemote(a, events) {
+  if (!a) return null;
+  return {
+    id: a.id,
+    candidateId: a.code,
+    status: a.status,
+    jobId: a.jobId,
+    jobTitle: a.jobTitle,
+    isGeneral: !a.jobId,
+    source: a.source === 'ta_link' ? 'TA link' : 'Careers',
+    submittedAt: a.submittedAt,
+    assignedTo: 'Talent Acquisition',
+    returnReason: a.returnReason,
+    rejectReason: a.rejectReason,
+    personal: a.personal || {},
+    professional: a.professional || {},
+    education: a.education || [],
+    additional: a.additional || {},
+    _events: (events || []).map((e) => ({
+      id: e.id, title: e.title, description: e.description, at: e.created_at, actor: e.actor_label || 'System',
+    })),
+  };
+}
+
 export default function TACandidateDetailPage() {
   const { candidateId } = useParams();
   const navigate = useNavigate();
   const toast = useToast();
+  const { configured } = useAuth();
   const {
     getApplicationByCandidate, interviewsFor, documentsFor, offerFor, employeeFor, activitiesFor,
     startReview, approveApplication, returnApplication, rejectApplication,
@@ -58,7 +87,19 @@ export default function TACandidateDetailPage() {
     verifyDocument, rejectDocument, saveOffer, confirmOfferAccepted, declineOffer,
   } = useApp();
 
-  const app = getApplicationByCandidate(candidateId);
+  const [remote, setRemote] = useState({ loading: configured, app: null });
+  const reloadRemote = () => {
+    if (!configured) return;
+    Promise.all([getApplication(candidateId), getApplicationEvents(candidateId)])
+      .then(([a, ev]) => setRemote({ loading: false, app: adaptRemote(applicationFromDb(a), ev) }))
+      .catch(() => setRemote({ loading: false, app: null }));
+  };
+  useEffect(() => {
+    if (configured) reloadRemote();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [configured, candidateId]);
+
+  const app = configured ? remote.app : getApplicationByCandidate(candidateId);
   const [modal, setModal] = useState(null); // 'return' | 'reject' | 'schedule' | 'offer'
   const [resultFor, setResultFor] = useState(null);
   const [rejectDoc, setRejectDoc] = useState(null);
@@ -82,9 +123,15 @@ export default function TACandidateDetailPage() {
   }, []);
 
   useEffect(() => {
-    if (app && app.status === APP_STATUS.SUBMITTED) startReview(app.id);
+    if (!app || app.status !== APP_STATUS.SUBMITTED) return;
+    if (configured) startReviewApi(app.id).then(reloadRemote).catch(() => {});
+    else startReview(app.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [app?.id]);
+  }, [app?.id, app?.status]);
+
+  if (configured && remote.loading) {
+    return <div className="cx-loading" style={{ padding: 48 }}>Loading candidate…</div>;
+  }
 
   if (!app) {
     return (
@@ -97,11 +144,13 @@ export default function TACandidateDetailPage() {
   const p = app.personal;
   const pr = app.professional;
   const job = app.jobId ? findJob(app.jobId) : null;
-  const interviews = interviewsFor(app.id);
-  const documents = documentsFor(app.id);
-  const offer = offerFor(app.id);
-  const employee = employeeFor(app.id);
-  const activities = collapseDocActivity(activitiesFor(app.id), documents.length);
+  const interviews = configured ? [] : interviewsFor(app.id);
+  const documents = configured ? [] : documentsFor(app.id);
+  const offer = configured ? null : offerFor(app.id);
+  const employee = configured ? null : employeeFor(app.id);
+  const activities = configured
+    ? app._events
+    : collapseDocActivity(activitiesFor(app.id), documents.length);
   const badge = stageBadgeForStatus(app.status);
 
   const stageIdx = Math.max(0, stageIndexForStatus(app.status));
@@ -112,6 +161,22 @@ export default function TACandidateDetailPage() {
   const showDocs = DOC_STAGES.includes(app.status);
 
   const act = (fn, msg) => { fn(); toast.success(msg); };
+
+  // TA review decision — real edge function when configured, mock action otherwise.
+  const decide = async (action, reason, msg, mockFn) => {
+    if (configured) {
+      try {
+        await decideApplication(app.id, action, reason);
+        await reloadRemote();
+        toast.success(msg);
+      } catch (e) {
+        toast.error(e.message || 'Could not complete that action.');
+      }
+    } else {
+      mockFn();
+      toast.success(msg);
+    }
+  };
 
   // Workflow step states — pipeline index: 1 review, 2 interview, 3 documents, 4 offer.
   const cur = stageIdx;
@@ -291,9 +356,9 @@ export default function TACandidateDetailPage() {
                       Check the profile against the role, then take the candidate forward to interviews or send the application back.
                     </p>
                     <div className="ta-btnrow">
-                      <Button icon="CheckCircle2" onClick={() => act(() => approveApplication(app.id), 'Application approved — moved to interview planning.')}>Approve</Button>
-                      <Button variant="ghost" icon="RotateCcw" onClick={() => setModal('return')}>Return</Button>
-                      <Button variant="ghost" icon="XCircle" onClick={() => setModal('reject')}>Reject</Button>
+                      <Button icon="CheckCircle2" onClick={() => decide('advance', null, 'Candidate advanced to the interview stage.', () => approveApplication(app.id))}>Advance candidate</Button>
+                      <Button variant="ghost" icon="RotateCcw" onClick={() => setModal('return')}>Request update</Button>
+                      <Button variant="ghost" icon="XCircle" onClick={() => setModal('reject')}>Close application</Button>
                     </div>
                   </>
                 ) : app.status === APP_STATUS.RETURNED ? (
@@ -462,13 +527,19 @@ export default function TACandidateDetailPage() {
       {/* Modals — reused from the existing workflow */}
       <ReasonModal
         open={modal === 'return'} onClose={() => setModal(null)}
-        title="Return application" label="Reason" confirmLabel="Return application" tone="secondary"
-        onSubmit={(reason) => { returnApplication(app.id, reason); setModal(null); toast.success('Application returned to candidate.'); }}
+        title="Request an update" label="What does the candidate need to add or fix?" confirmLabel="Send request" tone="secondary"
+        onSubmit={(reason) => {
+          setModal(null);
+          decide('request_update', reason, 'Update request sent to the candidate.', () => returnApplication(app.id, reason));
+        }}
       />
       <ReasonModal
         open={modal === 'reject'} onClose={() => setModal(null)}
-        title="Reject application" label="Reason" confirmLabel="Reject candidate" tone="danger"
-        onSubmit={(reason) => { rejectApplication(app.id, reason); setModal(null); toast.success('Application rejected.'); }}
+        title="Close application" label="Reason (internal)" confirmLabel="Close application" tone="danger"
+        onSubmit={(reason) => {
+          setModal(null);
+          decide('close', reason, 'Application closed.', () => rejectApplication(app.id, reason));
+        }}
       />
       <ReasonModal
         open={!!rejectDoc} onClose={() => setRejectDoc(null)}

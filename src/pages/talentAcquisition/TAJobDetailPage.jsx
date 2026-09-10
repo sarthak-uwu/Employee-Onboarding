@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Icon from '../../components/common/Icon.jsx';
 import TAHeader from '../../components/ta/TAHeader.jsx';
@@ -7,8 +7,59 @@ import Button from '../../components/ta/Button.jsx';
 import Tag from '../../components/ta/Tag.jsx';
 import EmptyState from '../../components/ta/EmptyState.jsx';
 import { useApp } from '../../context/AppContext.jsx';
+import { useAuth } from '../../context/AuthContext.jsx';
+import { useToast } from '../../context/ToastContext.jsx';
+import { createLink, setLinkActive } from '../../api/applicationLinks.js';
 import { APP_STATUS, stageIndexForStatus } from '../../constants/statuses.js';
 import { formatDate } from '../../utils/format.js';
+
+/* The TA's personal application link for this role. One link per (TA, job);
+   the token is server-generated and attribution is resolved server-side. */
+function ApplicationLinkCard({ jobId }) {
+  const toast = useToast();
+  const [link, setLink] = useState(null);
+  const [busy, setBusy] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    createLink(jobId)
+      .then((l) => !cancelled && setLink(l))
+      .catch(() => !cancelled && setLink(null))
+      .finally(() => !cancelled && setBusy(false));
+    return () => { cancelled = true; };
+  }, [jobId]);
+
+  if (busy) return <Card title="Your application link"><p className="ta-cell-mute">Loading…</p></Card>;
+  if (!link) return null;
+
+  const url = `${window.location.origin}/candidate/apply?ref=${link.token}`;
+  const toggle = async () => {
+    const updated = await setLinkActive(link.id, !link.active);
+    setLink(updated);
+  };
+
+  return (
+    <Card title="Your application link">
+      <p className="ta-cell-sub" style={{ marginBottom: 10 }}>
+        Share this link. Anyone who applies through it is attributed to you automatically.
+      </p>
+      <div className="ta-copyrow">
+        <input className="ta-copyrow__input" readOnly value={url} onFocus={(e) => e.target.select()} />
+        <Button
+          variant="ghost"
+          icon="Copy"
+          onClick={() => { navigator.clipboard?.writeText(url); toast.success('Link copied.'); }}
+        >
+          Copy
+        </Button>
+      </div>
+      <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <Tag tone={link.active ? 'green' : 'grey'}>{link.active ? 'Active' : 'Disabled'}</Tag>
+        <button className="ta-link" onClick={toggle}>{link.active ? 'Disable link' : 'Re-enable link'}</button>
+      </div>
+    </Card>
+  );
+}
 
 const BREAKDOWN = [
   { label: 'Applied', reach: 0, tone: 'blue' },
@@ -32,6 +83,7 @@ export default function TAJobDetailPage() {
   const { jobId } = useParams();
   const navigate = useNavigate();
   const { getJob, data } = useApp();
+  const { configured } = useAuth();
   const job = getJob(jobId);
 
   const applicants = useMemo(
@@ -86,6 +138,8 @@ export default function TAJobDetailPage() {
           <List title="What we offer" items={job.benefits} />
         </Card>
 
+        <div className="ta-stack">
+        {configured && <ApplicationLinkCard jobId={job.id} />}
         <Card title="Applicant pipeline">
           {applicants.length === 0 ? (
             <p className="ta-cell-mute">No applicants yet for this role.</p>
@@ -108,6 +162,7 @@ export default function TAJobDetailPage() {
             </Button>
           </div>
         </Card>
+        </div>
       </div>
     </>
   );

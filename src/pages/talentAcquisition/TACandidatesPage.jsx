@@ -6,7 +6,10 @@ import DataGrid from '../../components/ta/DataGrid.jsx';
 import Toolbar from '../../components/ta/Toolbar.jsx';
 import Tag from '../../components/ta/Tag.jsx';
 import { useApp } from '../../context/AppContext.jsx';
+import { useAuth } from '../../context/AuthContext.jsx';
 import { useCollectionView } from '../../hooks/useCollectionView.js';
+import { listApplications } from '../../api/applications.js';
+import { applicationFromDb } from '../../api/mappers.js';
 import { APP_STATUS, DOC_STATUS, stageBadgeForStatus } from '../../constants/statuses.js';
 import { formatDate } from '../../utils/format.js';
 
@@ -52,11 +55,40 @@ const COLUMNS = [
 
 export default function TACandidatesPage() {
   const navigate = useNavigate();
+  const { configured } = useAuth();
   const { data, getJob, documentsFor } = useApp();
   const [sp] = useSearchParams();
   const apps = data.applications || [];
 
-  const rows = useMemo(
+  const [remoteRows, setRemoteRows] = useState(null);
+  useEffect(() => {
+    if (!configured) return undefined;
+    let cancelled = false;
+    listApplications()
+      .then((list) => {
+        if (cancelled) return;
+        setRemoteRows(
+          (list || []).map(applicationFromDb).map((a) => ({
+            id: a.id,
+            candidateId: a.id, // navigate by application id in production
+            name: a.candidateName || `${a.personal.firstName || ''} ${a.personal.lastName || ''}`.trim(),
+            email: a.candidateEmail,
+            job: a.jobTitle,
+            department: a.professional?.preferredJobLocation || 'General',
+            experience: Number(a.professional?.totalExperience) || 0,
+            source: a.source === 'ta_link' ? 'Referral' : 'Direct',
+            noticePeriod: a.professional?.noticePeriod || 'Not specified',
+            submittedAt: a.submittedAt,
+            status: a.status,
+            docs: { tone: 'grey', text: '—' },
+          }))
+        );
+      })
+      .catch(() => !cancelled && setRemoteRows([]));
+    return () => { cancelled = true; };
+  }, [configured]);
+
+  const mockRows = useMemo(
     () =>
       apps.map((a) => {
         const job = getJob(a.jobId);
@@ -83,6 +115,8 @@ export default function TACandidatesPage() {
       }),
     [apps, getJob, documentsFor]
   );
+
+  const rows = configured ? remoteRows || [] : mockRows;
 
   const stageParam = STAGE_GROUPS[sp.get('stage')] ? sp.get('stage') : 'all';
   const jobParam = sp.get('job') || null;

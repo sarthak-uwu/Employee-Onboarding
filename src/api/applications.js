@@ -50,13 +50,16 @@ export function listApplications({ status, search } = {}) {
   return q.order('submitted_at', { ascending: false, nullsFirst: false }).then(unwrap);
 }
 
-/** Candidate: edit + resubmit an application that was returned for revision. */
-export function updateReturnedApplication(id, patch) {
-  return supabase
-    .from('applications')
-    .update(patch)
-    .eq('id', id)
-    .select(LIST_COLUMNS)
-    .single()
-    .then(unwrap);
+/** TA review state machine. action = start_review | advance | close | request_update */
+export function decideApplication(applicationId, action, reason) {
+  return callFn('application-decision', { body: { applicationId, action, reason } });
+}
+
+export function startReview(applicationId) {
+  return decideApplication(applicationId, 'start_review');
+}
+
+/** Candidate: apply edits to a RETURNED application and send it back to review. */
+export function resubmitApplication(applicationId, patch = {}) {
+  return callFn('resubmit-application', { body: { applicationId, ...patch } });
 }

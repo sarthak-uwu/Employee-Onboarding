@@ -6,7 +6,7 @@ import { useJobFilters } from '../../hooks/useJobFilters.js';
 
 export default function JobsPage() {
   const navigate = useNavigate();
-  const { jobs, jobsLoading } = useApp();
+  const { publishedJobs: jobs, jobsLoading } = useApp();
   const f = useJobFilters(jobs);
 
   return (

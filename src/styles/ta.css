@@ -1460,6 +1460,11 @@
 .cx-page__title { font-size: clamp(19px, 2.2vw, 23px); font-weight: 700; }
 .cx-page__sub { font-size: 13px; color: var(--ta-text-soft); margin-top: 4px; max-width: 70ch; }
 .cx-loading { padding: 48px 0; text-align: center; color: var(--ta-text-soft); font-size: 13px; }
+.ta-copyrow { display: flex; gap: 8px; align-items: center; }
+.ta-copyrow__input {
+  flex: 1; min-width: 0; font: inherit; font-size: 12px; padding: 8px 10px;
+  border: 1px solid var(--ta-line); border-radius: 8px; background: var(--ta-bg-soft, #f6f7f9); color: var(--ta-text);
+}
 
 /* job detail — title on the left, key facts fill the space on the right */
 .cx-jobhead {

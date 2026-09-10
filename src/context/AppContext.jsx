@@ -19,7 +19,7 @@ import {
   makeOfferId,
   uid,
 } from '../utils/ids.js';
-import { listPublishedJobs } from '../api/jobs.js';
+import { listAllJobs } from '../api/jobs.js';
 import { jobFromDb } from '../api/mappers.js';
 
 const DATA_KEY = 'talentflow.data.v7'; // bumped: new onboarding-verification statuses replace OFFER_PENDING_HR
@@ -38,23 +38,27 @@ export function AppProvider({ children }) {
   const role = auth.configured ? auth.role : demoRole;
   const setRole = auth.configured ? () => {} : setDemoRole;
 
-  // Real published jobs from the database (when a backend is configured). The
-  // mock JOBS list stays the source only in offline demo mode.
+  // Real jobs from the database (when a backend is configured). RLS returns only
+  // published jobs to candidates and every job to staff, so one call serves both.
+  // The mock JOBS list stays the source only in offline demo mode.
   const [liveJobs, setLiveJobs] = useState(null);
+  const reloadJobs = useCallback(() => {
+    if (!auth.configured) return Promise.resolve();
+    return listAllJobs()
+      .then((rows) => setLiveJobs((rows || []).map(jobFromDb)))
+      .catch(() => setLiveJobs([]));
+  }, [auth.configured]);
   useEffect(() => {
-    if (!auth.configured) return;
     let cancelled = false;
-    listPublishedJobs()
-      .then((rows) => {
-        if (!cancelled) setLiveJobs((rows || []).map(jobFromDb));
-      })
-      .catch(() => {
-        if (!cancelled) setLiveJobs([]);
-      });
+    if (auth.configured) {
+      listAllJobs()
+        .then((rows) => !cancelled && setLiveJobs((rows || []).map(jobFromDb)))
+        .catch(() => !cancelled && setLiveJobs([]));
+    }
     return () => {
       cancelled = true;
     };
-  }, [auth.configured]);
+  }, [auth.configured, auth.role]);
 
   // Demo data from an older seed shape is rebuilt automatically — the storage
   // key stays the same, we just re-seed when the version inside it is behind.
@@ -679,6 +683,7 @@ export function AppProvider({ children }) {
       : [...(state.jobs || []), ...JOBS];
     return {
       jobs: allJobs,
+      publishedJobs: allJobs.filter((j) => !j.status || j.status === 'published'),
       jobsLoading: auth.configured && liveJobs === null,
       getJob: (id) => allJobs.find((j) => j.id === id || j.code === id) || null,
       getApplication: (id) => apps.find((a) => a.id === id) || null,
@@ -702,6 +707,7 @@ export function AppProvider({ children }) {
       authConfigured: auth.configured,
       authLoading: auth.loading,
       signOut: auth.signOut,
+      reloadJobs,
       data: state,
       ...selectors,
       submitApplication,
@@ -739,6 +745,7 @@ export function AppProvider({ children }) {
       auth.configured,
       auth.loading,
       auth.signOut,
+      reloadJobs,
       state,
       selectors,
       createJob,
