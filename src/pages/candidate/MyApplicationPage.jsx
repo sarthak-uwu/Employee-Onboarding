@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Icon from '../../components/common/Icon.jsx';
 import Button from '../../components/ta/Button.jsx';
@@ -7,7 +7,10 @@ import Tag from '../../components/ta/Tag.jsx';
 import EmptyState from '../../components/ta/EmptyState.jsx';
 import { Field, Input } from '../../components/common/Field.jsx';
 import { useApp } from '../../context/AppContext.jsx';
+import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
+import { listMyApplications, getApplicationEvents } from '../../api/applications.js';
+import { applicationFromDb } from '../../api/mappers.js';
 import { initialsOf, formatDate } from '../../utils/format.js';
 import {
   APP_STATUS,
@@ -167,17 +170,63 @@ function OnboardingForm({ initial, onSubmit }) {
   );
 }
 
+/* Map a database application + timeline into the shape this page renders. The
+   document / interview / offer / onboarding sections belong to later phases and
+   stay gated by status until then. */
+function adaptRemote(a) {
+  if (!a) return null;
+  return {
+    id: a.code,
+    candidateId: a.code,
+    jobTitle: a.jobTitle,
+    submittedAt: a.submittedAt,
+    assignedTo: 'Talent Acquisition',
+    status: a.status,
+    returnReason: a.returnReason,
+    rejectReason: a.rejectReason,
+    personal: a.personal || {},
+    onboarding: null,
+    candidateId: null, // no separate candidate code in the production model
+  };
+}
+
 export default function MyApplicationPage() {
   const navigate = useNavigate();
   const toast = useToast();
+  const { configured } = useAuth();
   const {
     data, getApplication, interviewsFor, documentsFor, offerFor, employeeFor, activitiesFor,
     resubmitApplication, uploadDocument, waiveDocument, submitOnboardingForms,
   } = useApp();
   const [reasonFor, setReasonFor] = useState(null); // document id the candidate is explaining
   const [reasonText, setReasonText] = useState('');
+  const [remote, setRemote] = useState({ loading: configured, app: null, events: [] });
 
-  const app = data.myApplicationId ? getApplication(data.myApplicationId) : null;
+  useEffect(() => {
+    if (!configured) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const apps = await listMyApplications();
+        const latest = apps?.[0] ? applicationFromDb(apps[0]) : null;
+        const events = latest ? await getApplicationEvents(latest.id) : [];
+        if (!cancelled) setRemote({ loading: false, app: latest, events });
+      } catch {
+        if (!cancelled) setRemote({ loading: false, app: null, events: [] });
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [configured]);
+
+  if (configured && remote.loading) {
+    return <div className="cx-page"><div className="cx-loading">Loading your application…</div></div>;
+  }
+
+  const app = configured
+    ? adaptRemote(remote.app)
+    : data.myApplicationId
+    ? getApplication(data.myApplicationId)
+    : null;
 
   if (!app) {
     return (
@@ -192,12 +241,21 @@ export default function MyApplicationPage() {
     );
   }
 
-  const interviews = interviewsFor(app.id);
-  const documents = documentsFor(app.id);
-  const offer = offerFor(app.id);
-  const employee = employeeFor(app.id);
-  const activities = activitiesFor(app.id);
-  const name = `${app.personal.firstName} ${app.personal.lastName}`;
+  const interviews = configured ? [] : interviewsFor(app.id);
+  const documents = configured ? [] : documentsFor(app.id);
+  const offer = configured ? null : offerFor(app.id);
+  const employee = configured ? null : employeeFor(app.id);
+  const activities = configured
+    ? remote.events.map((e) => ({
+        id: e.id,
+        title: e.title,
+        description: e.description,
+        at: e.created_at,
+        actor: e.actor_label || 'System',
+        type: e.type,
+      }))
+    : activitiesFor(app.id);
+  const name = `${app.personal.firstName || ''} ${app.personal.lastName || ''}`.trim() || 'there';
 
   const status = app.status;
   const badge = stageBadgeForStatus(status);
@@ -235,10 +293,12 @@ export default function MyApplicationPage() {
           </div>
         </div>
         <dl className="cx-idcard__facts">
-          <div>
-            <dt>{employee ? 'Employee ID' : 'Candidate ID'}</dt>
-            <dd>{employee ? employee.id : app.candidateId}</dd>
-          </div>
+          {(employee || app.candidateId) && (
+            <div>
+              <dt>{employee ? 'Employee ID' : 'Candidate ID'}</dt>
+              <dd>{employee ? employee.id : app.candidateId}</dd>
+            </div>
+          )}
           <div><dt>Application ID</dt><dd>{app.id}</dd></div>
           <div><dt>Submitted</dt><dd>{formatDate(app.submittedAt)}</dd></div>
           <div><dt>Assigned to</dt><dd>{app.assignedTo}</dd></div>
@@ -274,9 +334,11 @@ export default function MyApplicationPage() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Icon name="RotateCcw" size={15} /> <strong>Action needed:</strong> {app.returnReason}
           </div>
-          <Button icon="RotateCcw" onClick={() => { resubmitApplication(app.id); toast.success('Application resubmitted for review.'); }}>
-            Update &amp; resubmit
-          </Button>
+          {!configured && (
+            <Button icon="RotateCcw" onClick={() => { resubmitApplication(app.id); toast.success('Application resubmitted for review.'); }}>
+              Update &amp; resubmit
+            </Button>
+          )}
         </div>
       )}
       <div className="ta-stack">
