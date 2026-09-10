@@ -52,7 +52,7 @@ await act(async () => {
 
 const results = [];
 const check = (label, cond) => { results.push([label, !!cond]); console.log(`  ${cond ? 'PASS' : 'FAIL'}  ${label}`); };
-const run = async (fn) => { await act(async () => { fn(); }); };
+const run = async (fn) => { await act(async () => { await fn(); }); };
 
 const form = {
   jobId: 'JOB-1024',
@@ -65,7 +65,7 @@ const form = {
 };
 
 let newJob;
-await run(() => { newJob = ctx.createJob({ title: 'Platform SRE', department: 'Platform', location: 'Remote, India', workMode: 'Remote', employmentType: 'Full-time', experience: '4–8 years', deadline: '2026-12-01', description: 'x', responsibilities: ['a'], qualifications: [], requiredSkills: ['Kubernetes'], preferredSkills: [], benefits: [] }); });
+await run(async () => { newJob = await ctx.createJob({ title: 'Platform SRE', department: 'Platform', location: 'Remote, India', workMode: 'Remote', employmentType: 'Full-time', experience: '4–8 years', deadline: '2026-12-01', description: 'x', responsibilities: ['a'], qualifications: [], requiredSkills: ['Kubernetes'], preferredSkills: [], benefits: [] }); });
 check('TA creates job -> JOB id + appears in jobs list', newJob?.id?.startsWith('JOB-') && ctx.getJob(newJob.id)?.title === 'Platform SRE');
 
 let ids;

@@ -30,8 +30,26 @@ export function listAllJobs() {
     .then(unwrap);
 }
 
+/** Accepts the UI job payload (camelCase) and stores it published. */
 export function createJob(payload) {
-  return supabase.from('jobs').insert(payload).select(COLUMNS).single().then(unwrap);
+  const row = {
+    job_code: payload.jobCode || `JOB-${Date.now().toString().slice(-7)}`,
+    title: payload.title,
+    department: payload.department || null,
+    location: payload.location || null,
+    work_mode: payload.workMode || null,
+    employment_type: payload.employmentType || null,
+    experience: payload.experience || null,
+    description: payload.description || null,
+    responsibilities: payload.responsibilities || [],
+    required_skills: payload.requiredSkills || [],
+    qualifications: payload.qualifications || [],
+    preferred_skills: payload.preferredSkills || [],
+    benefits: payload.benefits || [],
+    deadline: payload.deadline || null,
+    status: payload.status || 'published',
+  };
+  return supabase.from('jobs').insert(row).select(COLUMNS).single().then(unwrap);
 }
 
 export function updateJob(id, patch) {

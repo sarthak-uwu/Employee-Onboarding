@@ -146,10 +146,14 @@ export default function TAJobsPage() {
       <CreateJobDrawer
         open={open}
         onClose={() => setOpen(false)}
-        onCreate={(payload) => {
-          const job = createJob(payload);
-          setOpen(false);
-          toast.success(`${job.title} published (${job.id}).`);
+        onCreate={async (payload) => {
+          try {
+            const job = await createJob(payload);
+            setOpen(false);
+            toast.success(`${job.title} published (${job.code || job.id}).`);
+          } catch (e) {
+            toast.error(e.message || 'Could not create the job.');
+          }
         }}
       />
     </>

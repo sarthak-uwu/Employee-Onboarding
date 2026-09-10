@@ -19,7 +19,7 @@ import {
   makeOfferId,
   uid,
 } from '../utils/ids.js';
-import { listAllJobs } from '../api/jobs.js';
+import { listAllJobs, createJob as createJobApi } from '../api/jobs.js';
 import { jobFromDb } from '../api/mappers.js';
 
 const DATA_KEY = 'talentflow.data.v7'; // bumped: new onboarding-verification statuses replace OFFER_PENDING_HR
@@ -625,7 +625,14 @@ export function AppProvider({ children }) {
   );
 
   const createJob = useCallback(
-    (payload) => {
+    async (payload) => {
+      // Real backend: insert + refresh the live list, return the UI-shaped job.
+      if (auth.configured) {
+        const row = await createJobApi(payload);
+        const job = jobFromDb(row);
+        setLiveJobs((prev) => [job, ...(prev || [])]);
+        return job;
+      }
       const jobSeq = (state.counters?.job || 1000) + 1;
       const job = {
         id: `JOB-${jobSeq}`,
@@ -660,7 +667,7 @@ export function AppProvider({ children }) {
       });
       return job;
     },
-    [mutate, state.counters]
+    [mutate, state.counters, auth.configured]
   );
 
   const resetDemo = useCallback(() => {
