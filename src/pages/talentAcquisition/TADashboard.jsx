@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Icon from '../../components/common/Icon.jsx';
 import TAHeader from '../../components/ta/TAHeader.jsx';
@@ -7,6 +7,9 @@ import KpiCard from '../../components/ta/KpiCard.jsx';
 import DonutChart from '../../components/ta/DonutChart.jsx';
 import FunnelChart from '../../components/ta/FunnelChart.jsx';
 import { useApp } from '../../context/AppContext.jsx';
+import { useAuth } from '../../context/AuthContext.jsx';
+import { listApplications, listRecentEvents } from '../../api/applications.js';
+import { applicationFromDb } from '../../api/mappers.js';
 import { DEMO_USERS, ROLES } from '../../constants/roles.js';
 import {
   APP_STATUS,
@@ -73,27 +76,59 @@ const SOON_THRESHOLD_DAYS = 15;
 export default function TADashboard() {
   const navigate = useNavigate();
   const { data, jobs } = useApp();
+  const { configured } = useAuth();
   const user = DEMO_USERS[ROLES.TA];
   const [period, setPeriod] = useState('all');
   const [updatesOpen, setUpdatesOpen] = useState(false);
+  const [remote, setRemote] = useState({ apps: null, events: [] });
+
+  useEffect(() => {
+    if (!configured) return;
+    Promise.all([listApplications(), listRecentEvents()])
+      .then(([list, events]) => {
+        const apps = (list || []).map(applicationFromDb).map((a) => ({
+          id: a.id,
+          candidateId: a.id,
+          status: a.status,
+          submittedAt: a.submittedAt || a.createdAt,
+          source: a.source === 'ta_link' ? 'Referral' : 'Direct',
+          jobId: a.jobId,
+          personal: a.personal || {},
+          professional: a.professional || {},
+        }));
+        setRemote({ apps, events: events || [] });
+      })
+      .catch(() => setRemote({ apps: [], events: [] }));
+  }, [configured]);
 
   // ----- DATA -----
-  const apps = data.applications || [];
-  const interviews = data.interviews || [];
-  const offers = data.offers || [];
-  const activities = data.activities || [];
+  const apps = configured ? remote.apps || [] : data.applications || [];
+  const interviews = configured ? [] : data.interviews || [];
+  const offers = configured ? [] : data.offers || [];
+  const activities = configured
+    ? remote.events.map((e) => ({
+        id: e.id,
+        applicationId: e.application_id,
+        title: e.title,
+        at: e.created_at,
+        candidateId: e.application_id,
+        who: `${e.applications?.candidates?.first_name || ''} ${e.applications?.candidates?.last_name || ''}`.trim() || 'Candidate',
+      }))
+    : data.activities || [];
 
   // Candidate-driven updates, newest first, resolved to a clickable candidate.
   const appById = new Map(apps.map((a) => [a.id, a]));
-  const candidateUpdates = mergeConsecutive(
-    activities.filter((a) => CANDIDATE_UPDATE_TITLES.has(a.title) && appById.has(a.applicationId)),
-    ['Document Uploaded', 'Document Not Provided'],
-  )
-    .slice(0, 6)
-    .map((a) => {
-      const app = appById.get(a.applicationId);
-      return { ...a, candidateId: app.candidateId, who: `${app.personal.firstName} ${app.personal.lastName}` };
-    });
+  const candidateUpdates = configured
+    ? activities.filter((a) => CANDIDATE_UPDATE_TITLES.has(a.title)).slice(0, 6)
+    : mergeConsecutive(
+        activities.filter((a) => CANDIDATE_UPDATE_TITLES.has(a.title) && appById.has(a.applicationId)),
+        ['Document Uploaded', 'Document Not Provided'],
+      )
+        .slice(0, 6)
+        .map((a) => {
+          const app = appById.get(a.applicationId);
+          return { ...a, candidateId: app.candidateId, who: `${app.personal.firstName} ${app.personal.lastName}` };
+        });
 
   // ----- FILTERING -----
   // Applications inside the selected time period (used by the pipeline + source chart).

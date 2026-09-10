@@ -33,6 +33,16 @@ export function getApplication(id) {
     .then(unwrap);
 }
 
+/** TA/HR: recent timeline events across all applications the caller can see. */
+export function listRecentEvents(limit = 40) {
+  return supabase
+    .from('application_events')
+    .select('id, application_id, type, title, description, created_at, actor_label, applications(application_code, candidates(first_name, last_name), jobs(title))')
+    .order('created_at', { ascending: false })
+    .limit(limit)
+    .then(unwrap);
+}
+
 export function getApplicationEvents(id) {
   return supabase
     .from('application_events')
