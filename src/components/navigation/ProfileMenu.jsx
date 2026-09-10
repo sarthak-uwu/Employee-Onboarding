@@ -16,10 +16,21 @@ const ROLE_TITLE = {
    to restart the demo. `links` adds portal-specific rows above the switcher. */
 export default function ProfileMenu({ role, links = [] }) {
   const navigate = useNavigate();
-  const { setRole, startGuidedDemo } = useApp();
+  const { setRole, startGuidedDemo, authConfigured, profile, signOut } = useApp();
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
-  const user = DEMO_USERS[role] || DEMO_USERS[ROLES.CANDIDATE];
+  const demoUser = DEMO_USERS[role] || DEMO_USERS[ROLES.CANDIDATE];
+  const user = authConfigured
+    ? {
+        name: profile?.full_name || profile?.email || 'Account',
+        initials: (profile?.full_name || profile?.email || '?')
+          .split(/[\s@.]+/)
+          .filter(Boolean)
+          .slice(0, 2)
+          .map((s) => s[0].toUpperCase())
+          .join(''),
+      }
+    : demoUser;
 
   useEffect(() => {
     if (!open) return undefined;
@@ -32,7 +43,12 @@ export default function ProfileMenu({ role, links = [] }) {
   const go = (to) => { setOpen(false); navigate(to); };
   const switchTo = (r) => { setOpen(false); setRole(r); navigate(ROLE_META[r].home); };
   const restart = () => { setOpen(false); startGuidedDemo(); setRole(ROLES.CANDIDATE); navigate('/candidate/jobs'); };
-  const signOut = () => { setOpen(false); setRole(null); navigate('/'); };
+  const doSignOut = async () => {
+    setOpen(false);
+    if (authConfigured) await signOut();
+    else setRole(null);
+    navigate('/');
+  };
 
   return (
     <div className="profilemenu" ref={ref}>
@@ -68,18 +84,22 @@ export default function ProfileMenu({ role, links = [] }) {
             </button>
           ))}
 
-          <div className="profilemenu__sep">Switch view</div>
-          {ROLE_ORDER.filter((r) => r !== role).map((r) => (
-            <button key={r} type="button" className="profilemenu__item" onClick={() => switchTo(r)} role="menuitem">
-              <Icon name="RefreshCw" size={15} /> {ROLE_META[r].label}
-            </button>
-          ))}
-
-          <div className="profilemenu__sep" />
-          <button type="button" className="profilemenu__item" onClick={restart} role="menuitem">
-            <Icon name="RotateCcw" size={15} /> Restart demo
-          </button>
-          <button type="button" className="profilemenu__item" onClick={signOut} role="menuitem">
+          {!authConfigured && (
+            <>
+              <div className="profilemenu__sep">Switch view</div>
+              {ROLE_ORDER.filter((r) => r !== role).map((r) => (
+                <button key={r} type="button" className="profilemenu__item" onClick={() => switchTo(r)} role="menuitem">
+                  <Icon name="RefreshCw" size={15} /> {ROLE_META[r].label}
+                </button>
+              ))}
+              <div className="profilemenu__sep" />
+              <button type="button" className="profilemenu__item" onClick={restart} role="menuitem">
+                <Icon name="RotateCcw" size={15} /> Restart demo
+              </button>
+            </>
+          )}
+          {authConfigured && <div className="profilemenu__sep" />}
+          <button type="button" className="profilemenu__item" onClick={doSignOut} role="menuitem">
             <Icon name="LogOut" size={15} /> Sign out
           </button>
         </div>

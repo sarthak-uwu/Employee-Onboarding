@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { useAuth } from './AuthContext.jsx';
 import { useLocalStorage } from '../hooks/useLocalStorage.js';
 import { buildSeed, SEED_VERSION } from '../data/seed.js';
 import { JOBS, findJob } from '../data/jobs.js';
@@ -26,7 +27,14 @@ const AppContext = createContext(null);
 
 export function AppProvider({ children }) {
   const [data, setData] = useLocalStorage(DATA_KEY, () => buildSeed());
-  const [role, setRole] = useLocalStorage(ROLE_KEY, null);
+
+  // Role now comes from real auth (Google -> profile.role). Until a Supabase
+  // project is configured we fall back to the old local demo role-switch so the
+  // prototype still runs offline.
+  const auth = useAuth();
+  const [demoRole, setDemoRole] = useLocalStorage(ROLE_KEY, null);
+  const role = auth.configured ? auth.role : demoRole;
+  const setRole = auth.configured ? () => {} : setDemoRole;
 
   // Demo data from an older seed shape is rebuilt automatically — the storage
   // key stays the same, we just re-seed when the version inside it is behind.
@@ -667,6 +675,10 @@ export function AppProvider({ children }) {
     () => ({
       role,
       setRole,
+      profile: auth.profile,
+      authConfigured: auth.configured,
+      authLoading: auth.loading,
+      signOut: auth.signOut,
       data: state,
       ...selectors,
       submitApplication,
@@ -700,6 +712,10 @@ export function AppProvider({ children }) {
     [
       role,
       setRole,
+      auth.profile,
+      auth.configured,
+      auth.loading,
+      auth.signOut,
       state,
       selectors,
       createJob,

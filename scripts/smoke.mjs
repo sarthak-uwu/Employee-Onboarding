@@ -15,13 +15,15 @@ globalThis.localStorage = {
 
 const entry = `
 import React from 'react';
+import { AuthProvider } from './src/context/AuthContext.jsx';
 import { AppProvider } from './src/context/AppContext.jsx';
 import { ToastProvider } from './src/context/ToastContext.jsx';
 import AppRoutes from './src/routes/AppRoutes.jsx';
 export function Root() {
   return React.createElement(ToastProvider, null,
-    React.createElement(AppProvider, null,
-      React.createElement(AppRoutes, null)));
+    React.createElement(AuthProvider, null,
+      React.createElement(AppProvider, null,
+        React.createElement(AppRoutes, null))));
 }
 `;
 mkdirSync('scripts/.tmp', { recursive: true });

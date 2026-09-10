@@ -1,12 +1,17 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import Icon from '../components/common/Icon.jsx';
 import { useApp } from '../context/AppContext.jsx';
+import { useAuth } from '../context/AuthContext.jsx';
 import { ROLES, ROLE_META } from '../constants/roles.js';
 import markWhite from '../assets/centrik-logo-white.png';
 import markColor from '../assets/ccentrik-logo.png';
 
 const DOMAIN = '@ccentrik.com';
+
+function homeForRole(role) {
+  return ROLE_META[role]?.home || '/candidate';
+}
 
 const JOURNEY = [
   { label: 'Applied', icon: 'FileText', desc: 'All in one place', c: '#60a5fa', c2: '#2563eb' },
@@ -28,6 +33,7 @@ function roleFromUser(username) {
 export default function LoginPage() {
   const navigate = useNavigate();
   const { setRole } = useApp();
+  const { configured, role, loading: authLoading, signInWithGoogle } = useAuth();
 
   const [username, setUsername] = useState('hr');
   const [password, setPassword] = useState('ccentrik');
@@ -35,11 +41,34 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const signIn = (role) => {
+  // --- real auth path ---------------------------------------------------
+  if (configured) {
+    if (authLoading) {
+      return <div className="wsauth" style={{ placeItems: 'center' }}><span className="wsauth__spinner" /></div>;
+    }
+    if (role) return <Navigate to={homeForRole(role)} replace />;
+  }
+
+  const googleSignIn = async () => {
+    if (configured) {
+      setError('');
+      setLoading(true);
+      const { error: oauthError } = await signInWithGoogle();
+      if (oauthError) {
+        setError(oauthError.message);
+        setLoading(false);
+      }
+      return; // browser redirects to Google
+    }
+    // not configured -> keep the offline demo behaviour
+    demoSignIn(ROLES.HR);
+  };
+
+  const demoSignIn = (r) => {
     setLoading(true);
     setTimeout(() => {
-      setRole(role);
-      navigate(ROLE_META[role].home);
+      setRole(r);
+      navigate(ROLE_META[r].home);
     }, 700);
   };
 
@@ -47,9 +76,13 @@ export default function LoginPage() {
     e.preventDefault();
     if (loading) return;
     setError('');
+    if (configured) {
+      setError('Use "Sign in with Google" — that is the only sign-in method.');
+      return;
+    }
     if (!username.trim()) { setError('Enter your username.'); return; }
     if (!password) { setError('Enter your password.'); return; }
-    signIn(roleFromUser(username.trim()));
+    demoSignIn(roleFromUser(username.trim()));
   };
 
   return (
@@ -111,58 +144,67 @@ export default function LoginPage() {
             </div>
           )}
 
-          <label className="wsauth__field">
-            <span className="wsauth__label">Username</span>
-            <span className="wsauth__box">
-              <input
-                type="text"
-                autoComplete="username"
-                placeholder="yourname"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                aria-label="Username"
-              />
-              <span className="wsauth__suffix">{DOMAIN}</span>
-            </span>
-          </label>
+          {configured ? (
+            <p className="wsauth__lede" style={{ marginBottom: 4 }}>
+              Sign in with your Ccentrik Google account. Your access level is set by your
+              administrator.
+            </p>
+          ) : (
+            <>
+              <label className="wsauth__field">
+                <span className="wsauth__label">Username</span>
+                <span className="wsauth__box">
+                  <input
+                    type="text"
+                    autoComplete="username"
+                    placeholder="yourname"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    aria-label="Username"
+                  />
+                  <span className="wsauth__suffix">{DOMAIN}</span>
+                </span>
+              </label>
 
-          <label className="wsauth__field">
-            <span className="wsauth__label">Password</span>
-            <span className="wsauth__box">
-              <input
-                type={showPw ? 'text' : 'password'}
-                autoComplete="current-password"
-                placeholder="Enter your password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                aria-label="Password"
-              />
+              <label className="wsauth__field">
+                <span className="wsauth__label">Password</span>
+                <span className="wsauth__box">
+                  <input
+                    type={showPw ? 'text' : 'password'}
+                    autoComplete="current-password"
+                    placeholder="Enter your password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    aria-label="Password"
+                  />
+                  <button
+                    type="button"
+                    className="wsauth__eye"
+                    onClick={() => setShowPw((v) => !v)}
+                    aria-label={showPw ? 'Hide password' : 'Show password'}
+                  >
+                    <Icon name={showPw ? 'EyeOff' : 'Eye'} size={16} />
+                  </button>
+                </span>
+              </label>
+
               <button
                 type="button"
-                className="wsauth__eye"
-                onClick={() => setShowPw((v) => !v)}
-                aria-label={showPw ? 'Hide password' : 'Show password'}
+                className="wsauth__forgot"
+                onClick={() => setError('Password resets are handled by your workspace administrator.')}
               >
-                <Icon name={showPw ? 'EyeOff' : 'Eye'} size={16} />
+                Forgot password?
               </button>
-            </span>
-          </label>
 
-          <button
-            type="button"
-            className="wsauth__forgot"
-            onClick={() => setError('Password resets are handled by your workspace administrator.')}
-          >
-            Forgot password?
-          </button>
+              <button type="submit" className="wsauth__submit" disabled={loading}>
+                {loading ? <><span className="wsauth__spinner" /> Signing in…</> : <>Sign in <Icon name="ArrowRight" size={16} /></>}
+              </button>
 
-          <button type="submit" className="wsauth__submit" disabled={loading}>
-            {loading ? <><span className="wsauth__spinner" /> Signing in…</> : <>Sign in <Icon name="ArrowRight" size={16} /></>}
-          </button>
+              <div className="wsauth__or"><span>or</span></div>
+            </>
+          )}
 
-          <div className="wsauth__or"><span>or</span></div>
-
-          <button type="button" className="wsauth__google" onClick={() => !loading && signIn(ROLES.HR)} disabled={loading}>
+          <button type="button" className="wsauth__google" onClick={() => !loading && googleSignIn()} disabled={loading}>
             <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true">
               <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.76h3.57c2.08-1.92 3.28-4.74 3.28-8.09Z" />
               <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.76c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.15-4.53H2.18v2.84A11 11 0 0 0 12 23Z" />

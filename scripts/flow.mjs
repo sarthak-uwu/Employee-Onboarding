@@ -18,6 +18,7 @@ const { act } = await import('react');
 
 const harness = `
 import React from 'react';
+import { AuthProvider } from './src/context/AuthContext.jsx';
 import { AppProvider, useApp } from './src/context/AppContext.jsx';
 import { ToastProvider } from './src/context/ToastContext.jsx';
 export function Harness({ onCtx }) {
@@ -27,8 +28,9 @@ export function Harness({ onCtx }) {
 }
 export function App({ onCtx }) {
   return React.createElement(ToastProvider, null,
-    React.createElement(AppProvider, null,
-      React.createElement(Harness, { onCtx })));
+    React.createElement(AuthProvider, null,
+      React.createElement(AppProvider, null,
+        React.createElement(Harness, { onCtx }))));
 }
 `;
 mkdirSync('scripts/.tmp', { recursive: true });
