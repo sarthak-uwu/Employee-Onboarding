@@ -16,7 +16,7 @@ export default function ApplicationSuccessPage() {
   const { state } = useLocation();
   const navigate = useNavigate();
 
-  if (!state?.candidateId) return <Navigate to="/candidate" replace />;
+  if (!state?.candidateId && !state?.applicationId) return <Navigate to="/candidate" replace />;
 
   return (
     <div className="cx-page cx-page--narrow">
@@ -30,8 +30,13 @@ export default function ApplicationSuccessPage() {
 
       <Card>
         <div className="ta-info" style={{ marginBottom: 4 }}>
-          <div className="ta-info__item"><span className="ta-info__label">Candidate ID</span><span className="ta-info__value">{state.candidateId}</span></div>
-          <div className="ta-info__item"><span className="ta-info__label">Application ID</span><span className="ta-info__value">{state.applicationId}</span></div>
+          <div className="ta-info__item">
+            <span className="ta-info__label">Application reference</span>
+            <span className="ta-info__value">{state.applicationCode || state.applicationId}</span>
+          </div>
+          {state.candidateId && (
+            <div className="ta-info__item"><span className="ta-info__label">Candidate ID</span><span className="ta-info__value">{state.candidateId}</span></div>
+          )}
         </div>
       </Card>
 

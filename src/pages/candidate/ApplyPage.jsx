@@ -1,14 +1,20 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import Icon from '../../components/common/Icon.jsx';
 import Button from '../../components/ta/Button.jsx';
 import Card from '../../components/ta/Card.jsx';
 import { Field, FieldGrid, Input, Select, Textarea } from '../../components/ta/Field.jsx';
 import { useApp } from '../../context/AppContext.jsx';
+import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { simulateResumeParse, ANALYZE_STEPS } from '../../utils/resumeParser.js';
 import { loadJSON, saveJSON } from '../../hooks/useLocalStorage.js';
 import { uid } from '../../utils/ids.js';
+import { resolveLink } from '../../api/applicationLinks.js';
+import { uploadResume, parseResume } from '../../api/resumes.js';
+import { submitApplication as submitApplicationApi } from '../../api/applications.js';
+import { ApiError } from '../../api/client.js';
+import { jobFromDb } from '../../api/mappers.js';
 
 const DRAFT_KEY = 'talentflow.apply.draft.v2';
 const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -35,7 +41,7 @@ function blankForm(jobId) {
     firstName: '', lastName: '', email: '', phone: '', currentLocation: '', experience: '',
     currentCompany: '', currentJobTitle: '', highestQualification: '', noticePeriod: '', expectedSalary: '',
     coverNote: '', portfolio: '', source: '',
-    resume: null, skills: [], autofilled: [],
+    resume: null, resumePath: null, skills: [], autofilled: [],
   };
 }
 
@@ -49,11 +55,27 @@ export default function ApplyPage() {
   const { jobId: paramJobId } = useParams();
   const [sp] = useSearchParams();
   const jobId = paramJobId || sp.get('job') || null;
+  const refToken = sp.get('ref');
 
   const navigate = useNavigate();
   const { submitApplication, getJob } = useApp();
+  const { configured, user, signInWithGoogle } = useAuth();
   const toast = useToast();
-  const job = jobId ? getJob(jobId) : null;
+
+  // A TA link (?ref=token) is resolved server-side into the job + recruiter.
+  const [link, setLink] = useState(null);
+  const [linkError, setLinkError] = useState('');
+  const [serverError, setServerError] = useState('');
+
+  useEffect(() => {
+    if (!refToken || !configured) return;
+    resolveLink(refToken)
+      .then(setLink)
+      .catch((e) => setLinkError(e.message || 'This application link is not valid.'));
+  }, [refToken, configured]);
+
+  const job = link ? jobFromDb(link.job) : jobId ? getJob(jobId) : null;
+  const needsSignIn = configured && !user;
 
   const [form, setForm] = useState(() => {
     const d = loadJSON(DRAFT_KEY, null);
@@ -96,43 +118,78 @@ export default function ApplyPage() {
     return Object.keys(e).length === 0;
   };
 
-  const handleFile = (fileList) => {
+  const applyParsed = (p) => {
+    setForm((f) => ({
+      ...f,
+      firstName: p.firstName || f.firstName,
+      lastName: p.lastName || f.lastName,
+      email: p.email || f.email,
+      phone: p.mobile || f.phone,
+      currentLocation: p.currentLocation || f.currentLocation,
+      experience: p.totalExperience ? expBucket(p.totalExperience) : f.experience,
+      currentCompany: p.currentCompany || f.currentCompany,
+      currentJobTitle: p.currentJobTitle || f.currentJobTitle,
+      highestQualification: p.education?.[0]?.qualification || f.highestQualification,
+      portfolio: p.portfolio || p.linkedin || f.portfolio,
+      skills: p.skills?.length ? [...p.skills] : f.skills,
+      autofilled: ['firstName', 'lastName', 'email', 'phone', 'currentLocation', 'experience', 'currentCompany', 'currentJobTitle', 'highestQualification']
+        .filter((k) => (k === 'phone' ? p.mobile : p[k])),
+    }));
+    setErrors({});
+  };
+
+  const handleFile = async (fileList) => {
     const file = fileList?.[0];
     if (!file) return;
-    if (!/\.(pdf|docx?|)$/i.test(file.name) || file.size > 5 * 1024 * 1024) {
+    if (!/\.(pdf|docx?)$/i.test(file.name) || file.size > 5 * 1024 * 1024) {
       setErrors((e) => ({ ...e, resume: 'Please upload a PDF, DOC or DOCX file under 5 MB.' }));
       return;
     }
-    const meta = { name: file.name, size: file.size, type: file.type, uploadedAt: new Date().toISOString() };
     setErrors((e) => ({ ...e, resume: undefined }));
-    set({ resume: meta });
 
-    timers.current.forEach(clearTimeout);
-    timers.current = [];
-    setAnalyzeIdx(0);
-    ANALYZE_STEPS.forEach((_, i) => timers.current.push(setTimeout(() => setAnalyzeIdx(i + 1), (i + 1) * 380)));
-    timers.current.push(
-      setTimeout(() => {
-        const p = simulateResumeParse(meta.name);
-        setForm((f) => ({
-          ...f,
-          firstName: p.firstName, lastName: p.lastName, email: p.email, phone: p.mobile,
-          currentLocation: p.currentLocation, experience: expBucket(p.totalExperience),
-          currentCompany: p.currentCompany, currentJobTitle: p.currentJobTitle,
-          highestQualification: p.education?.[0]?.qualification || f.highestQualification,
-          skills: [...p.skills],
-          autofilled: ['firstName', 'lastName', 'email', 'phone', 'currentLocation', 'experience', 'currentCompany', 'currentJobTitle', 'highestQualification'],
-        }));
-        setErrors({});
+    // Offline demo path — simulated parse, no upload.
+    if (!configured) {
+      const meta = { name: file.name, size: file.size, type: file.type, uploadedAt: new Date().toISOString() };
+      set({ resume: meta });
+      timers.current.forEach(clearTimeout);
+      timers.current = [];
+      setAnalyzeIdx(0);
+      ANALYZE_STEPS.forEach((_, i) => timers.current.push(setTimeout(() => setAnalyzeIdx(i + 1), (i + 1) * 380)));
+      timers.current.push(
+        setTimeout(() => {
+          applyParsed(simulateResumeParse(meta.name));
+          toast.success('Resume details extracted — review each field before submitting.');
+        }, ANALYZE_STEPS.length * 380 + 200)
+      );
+      return;
+    }
+
+    // Real path — upload to secure storage, then server-side parse.
+    try {
+      setAnalyzeIdx(0);
+      const { path, meta } = await uploadResume(file);
+      set({ resume: meta, resumePath: path });
+      setAnalyzeIdx(2);
+      const { fields, extracted } = await parseResume(path);
+      setAnalyzeIdx(ANALYZE_STEPS.length);
+      if (extracted?.length) {
+        applyParsed(fields);
         toast.success('Resume details extracted — review each field before submitting.');
-      }, ANALYZE_STEPS.length * 380 + 200)
-    );
+      } else {
+        toast.info('Resume uploaded. We could not auto-fill from this file — please complete the form.');
+      }
+      setAnalyzeIdx(-1);
+    } catch (err) {
+      setAnalyzeIdx(-1);
+      set({ resume: null, resumePath: null });
+      setErrors((e) => ({ ...e, resume: err.message || 'Upload failed. Please try again.' }));
+    }
   };
 
   const removeResume = () => {
     timers.current.forEach(clearTimeout);
     setAnalyzeIdx(-1);
-    set({ resume: null, autofilled: [] });
+    set({ resume: null, resumePath: null, autofilled: [] });
   };
 
   const saveDraft = () => {
@@ -140,41 +197,76 @@ export default function ApplyPage() {
     toast.success('Draft saved on this device.');
   };
 
-  const submit = () => {
+  const buildPayload = () => ({
+    jobId: link ? link.job.id : job ? job.id : null,
+    linkToken: refToken || undefined,
+    source: link ? 'ta_link' : 'careers',
+    autofilled: form.autofilled,
+    personal: {
+      firstName: form.firstName, middleName: '', lastName: form.lastName,
+      email: form.email, mobile: form.phone, dob: '', gender: '', nationality: '',
+      currentLocation: form.currentLocation, preferredLocation: form.currentLocation,
+      address: { line1: '', line2: '', city: form.currentLocation, state: '', country: 'India', postalCode: '' },
+    },
+    professional: {
+      currentJobTitle: form.currentJobTitle, currentCompany: form.currentCompany,
+      totalExperience: expToNumber(form.experience), relevantExperience: '',
+      employmentStatus: form.currentCompany ? 'Employed' : '', currentCTC: '',
+      expectedCTC: form.expectedSalary, noticePeriod: form.noticePeriod,
+      preferredJobLocation: form.currentLocation,
+      skills: form.skills, certifications: [], languages: [],
+    },
+    education: [{ id: uid('edu'), qualification: form.highestQualification, university: '', specialization: '', year: '', grade: '' }],
+    additional: { coverNote: form.coverNote, referral: '', portfolio: form.portfolio, howHeard: form.source },
+    resumePath: form.resumePath,
+    resumeMeta: form.resume,
+  });
+
+  const submit = async () => {
+    setServerError('');
     if (!validateAll()) {
       toast.error('Please fix the highlighted fields.');
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
     setSubmitting(true);
-    setTimeout(() => {
-      const payload = {
-        jobId: form.jobId,
-        source: form.source || 'Direct',
-        autofilled: form.autofilled,
-        personal: {
-          firstName: form.firstName, middleName: '', lastName: form.lastName,
-          email: form.email, mobile: form.phone, dob: '', gender: '', nationality: '',
-          currentLocation: form.currentLocation, preferredLocation: form.currentLocation,
-          address: { line1: '', line2: '', city: form.currentLocation, state: '', country: 'India', postalCode: '' },
-        },
-        professional: {
-          currentJobTitle: form.currentJobTitle, currentCompany: form.currentCompany,
-          totalExperience: expToNumber(form.experience), relevantExperience: '',
-          employmentStatus: form.currentCompany ? 'Employed' : '', currentCTC: '',
-          expectedCTC: form.expectedSalary, noticePeriod: form.noticePeriod,
-          preferredJobLocation: form.currentLocation,
-          skills: form.skills, certifications: [], languages: [],
-        },
-        education: [{ id: uid('edu'), qualification: form.highestQualification, university: '', specialization: '', year: '', grade: '' }],
-        additional: { coverNote: form.coverNote, referral: '', portfolio: form.portfolio },
-        resume: form.resume,
-      };
-      const result = submitApplication(payload);
+
+    // Offline demo path
+    if (!configured) {
+      setTimeout(() => {
+        const result = submitApplication({ ...buildPayload(), jobId: form.jobId, source: form.source || 'Direct', resume: form.resume });
+        saveJSON(DRAFT_KEY, null);
+        setSubmitting(false);
+        navigate('/candidate/application/success', { state: { ...result, jobTitle: job ? job.title : 'General Application' } });
+      }, 900);
+      return;
+    }
+
+    // Real path — transactional edge function
+    try {
+      const result = await submitApplicationApi(buildPayload());
       saveJSON(DRAFT_KEY, null);
       setSubmitting(false);
-      navigate('/candidate/application/success', { state: { ...result, jobTitle: job ? job.title : 'General Application' } });
-    }, 900);
+      navigate('/candidate/application/success', {
+        state: {
+          applicationId: result.applicationId,
+          applicationCode: result.applicationCode,
+          jobTitle: job ? job.title : 'General Application',
+        },
+      });
+    } catch (err) {
+      setSubmitting(false);
+      if (err instanceof ApiError && err.fields && Object.keys(err.fields).length) {
+        const mapped = {};
+        for (const [k, v] of Object.entries(err.fields)) {
+          mapped[k === 'mobile' ? 'phone' : k] = v;
+        }
+        setErrors((e) => ({ ...e, ...mapped }));
+      }
+      setServerError(err.message || 'Something went wrong submitting your application.');
+      toast.error(err.message || 'Could not submit your application.');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   };
 
   const filledRequired = useMemo(
@@ -191,6 +283,42 @@ export default function ApplyPage() {
     </div>
   );
 
+  if (linkError) {
+    return (
+      <div className="cx-page cx-page--form">
+        <div className="wsauth__alert" role="alert" style={{ marginBottom: 16 }}>
+          <Icon name="AlertCircle" size={15} /> {linkError}
+        </div>
+        <Button variant="ghost" icon="ArrowLeft" onClick={() => navigate('/candidate/jobs')}>Browse open roles</Button>
+      </div>
+    );
+  }
+
+  if (needsSignIn) {
+    return (
+      <div className="cx-page cx-page--form">
+        <div className="cx-page__head">
+          <h1 className="cx-page__title">{job ? `Apply — ${job.title}` : 'Start your application'}</h1>
+          <p className="cx-page__sub">
+            {link?.recruiterName
+              ? `You're applying through ${link.recruiterName}. Sign in to continue.`
+              : 'Sign in with your Google account to start and track your application.'}
+          </p>
+        </div>
+        {job && (
+          <div className="cx-jobinfo" style={{ marginBottom: 16 }}>
+            <div className="cx-jobinfo__item"><span className="cx-jobinfo__label">Position</span><span className="cx-jobinfo__value">{job.title}</span></div>
+            <div className="cx-jobinfo__item"><span className="cx-jobinfo__label">Department</span><span className="cx-jobinfo__value">{job.department}</span></div>
+            <div className="cx-jobinfo__item"><span className="cx-jobinfo__label">Location</span><span className="cx-jobinfo__value">{job.location}</span></div>
+          </div>
+        )}
+        <Card>
+          <Button icon="LogIn" onClick={() => signInWithGoogle(window.location.href)}>Sign in with Google</Button>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="cx-page cx-page--form">
       <button className="ta-link" onClick={() => navigate(job ? `/candidate/jobs/${job.id}` : '/candidate/jobs')} style={{ marginBottom: 14 }}>
@@ -200,11 +328,19 @@ export default function ApplyPage() {
       <div className="cx-page__head">
         <h1 className="cx-page__title">{job ? 'Apply for this opportunity' : 'Submit your application'}</h1>
         <p className="cx-page__sub">
-          {job
+          {link?.recruiterName
+            ? `Applying through ${link.recruiterName}. Fields marked * are required.`
+            : job
             ? 'Complete the details below. Fields marked * are required.'
             : "Submit your profile and we'll consider you for current and future roles. Fields marked * are required."}
         </p>
       </div>
+
+      {serverError && (
+        <div className="wsauth__alert" role="alert" style={{ marginBottom: 14 }}>
+          <Icon name="AlertCircle" size={15} /> {serverError}
+        </div>
+      )}
 
       {job ? (
         <div className="cx-jobinfo">

@@ -1459,6 +1459,7 @@
 .cx-page__head { margin-bottom: clamp(14px, 2vw, 20px); }
 .cx-page__title { font-size: clamp(19px, 2.2vw, 23px); font-weight: 700; }
 .cx-page__sub { font-size: 13px; color: var(--ta-text-soft); margin-top: 4px; max-width: 70ch; }
+.cx-loading { padding: 48px 0; text-align: center; color: var(--ta-text-soft); font-size: 13px; }
 
 /* job detail — title on the left, key facts fill the space on the right */
 .cx-jobhead {

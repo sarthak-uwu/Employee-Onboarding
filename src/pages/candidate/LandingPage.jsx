@@ -6,7 +6,7 @@ import { useJobFilters } from '../../hooks/useJobFilters.js';
 
 export default function LandingPage() {
   const navigate = useNavigate();
-  const { jobs } = useApp();
+  const { jobs, jobsLoading } = useApp();
   const f = useJobFilters(jobs);
 
   return (
@@ -15,12 +15,16 @@ export default function LandingPage() {
         <div>
           <div className="cx-hero__eyebrow">Ccentrik Careers</div>
           <h1>Find your next opportunity</h1>
-          <p>{jobs.length} open roles across {f.facets.departments.length} departments. Submit your profile and we'll match you to the right role.</p>
+          <p>
+            {jobsLoading
+              ? 'Loading open roles…'
+              : `${jobs.length} open roles across ${f.facets.departments.length} departments. Submit your profile and we'll match you to the right role.`}
+          </p>
         </div>
         <Button icon="FileText" onClick={() => navigate('/candidate/apply')}>Submit general application</Button>
       </div>
 
-      <JobBrowser f={f} />
+      {jobsLoading ? <div className="cx-loading">Loading open positions…</div> : <JobBrowser f={f} />}
     </div>
   );
 }

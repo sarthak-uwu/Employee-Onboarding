@@ -19,8 +19,12 @@ function List({ title, items }) {
 export default function JobDetailsPage() {
   const { jobId } = useParams();
   const navigate = useNavigate();
-  const { getJob } = useApp();
+  const { getJob, jobsLoading } = useApp();
   const job = getJob(jobId);
+
+  if (jobsLoading) {
+    return <div className="cx-page"><div className="cx-loading">Loading role…</div></div>;
+  }
 
   if (!job) {
     return (

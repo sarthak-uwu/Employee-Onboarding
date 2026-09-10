@@ -19,6 +19,8 @@ import {
   makeOfferId,
   uid,
 } from '../utils/ids.js';
+import { listPublishedJobs } from '../api/jobs.js';
+import { jobFromDb } from '../api/mappers.js';
 
 const DATA_KEY = 'talentflow.data.v7'; // bumped: new onboarding-verification statuses replace OFFER_PENDING_HR
 const ROLE_KEY = 'talentflow.role.v3';
@@ -35,6 +37,24 @@ export function AppProvider({ children }) {
   const [demoRole, setDemoRole] = useLocalStorage(ROLE_KEY, null);
   const role = auth.configured ? auth.role : demoRole;
   const setRole = auth.configured ? () => {} : setDemoRole;
+
+  // Real published jobs from the database (when a backend is configured). The
+  // mock JOBS list stays the source only in offline demo mode.
+  const [liveJobs, setLiveJobs] = useState(null);
+  useEffect(() => {
+    if (!auth.configured) return;
+    let cancelled = false;
+    listPublishedJobs()
+      .then((rows) => {
+        if (!cancelled) setLiveJobs((rows || []).map(jobFromDb));
+      })
+      .catch(() => {
+        if (!cancelled) setLiveJobs([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [auth.configured]);
 
   // Demo data from an older seed shape is rebuilt automatically — the storage
   // key stays the same, we just re-seed when the version inside it is behind.
@@ -654,10 +674,13 @@ export function AppProvider({ children }) {
   /* ---------- selectors ---------- */
   const selectors = useMemo(() => {
     const apps = state.applications || [];
-    const allJobs = [...(state.jobs || []), ...JOBS];
+    const allJobs = auth.configured
+      ? liveJobs || []
+      : [...(state.jobs || []), ...JOBS];
     return {
       jobs: allJobs,
-      getJob: (id) => allJobs.find((j) => j.id === id) || null,
+      jobsLoading: auth.configured && liveJobs === null,
+      getJob: (id) => allJobs.find((j) => j.id === id || j.code === id) || null,
       getApplication: (id) => apps.find((a) => a.id === id) || null,
       getApplicationByCandidate: (candidateId) => apps.find((a) => a.candidateId === candidateId) || null,
       interviewsFor: (appId) =>
@@ -669,7 +692,7 @@ export function AppProvider({ children }) {
       activitiesFor: (appId) => (state.activities || []).filter((a) => a.applicationId === appId),
       notificationsFor: (roleTarget) => (state.notifications || []).filter((n) => n.role === roleTarget),
     };
-  }, [state]);
+  }, [state, auth.configured, liveJobs]);
 
   const value = useMemo(
     () => ({
