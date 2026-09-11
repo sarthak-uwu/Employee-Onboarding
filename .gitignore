@@ -1,0 +1,13 @@
+node_modules
+dist
+dist-ssr
+*.local
+.DS_Store
+.env
+.env.*
+!.env.example
+supabase/.branches
+supabase/.temp
+supabase/.env
+scripts/.tmp
+npm-debug.log*
