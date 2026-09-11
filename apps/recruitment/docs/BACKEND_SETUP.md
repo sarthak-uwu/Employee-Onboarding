@@ -46,7 +46,7 @@ The `20260910094000_storage.sql` migration creates four private buckets
 (`resumes`, `documents`, `offer-letters`, `email-attachments`) with RLS. Nothing
 to click.
 
-## 6. Edge function secrets (SMTP + links)
+## 6. Edge function secrets (SMTP + links + HR integration)
 
 ```bash
 supabase secrets set \
@@ -55,16 +55,26 @@ supabase secrets set \
   SMTP_USER=postmaster@ccentrik.com \
   SMTP_PASSWORD=... \
   SMTP_FROM="Ccentrik Talent Acquisition <no-reply@ccentrik.com>" \
-  PUBLIC_SITE_URL=http://localhost:5173
+  PUBLIC_SITE_URL=http://localhost:5173 \
+  INTEGRATION_SHARED_SECRET=<the SAME long random value set in the HR app> \
+  HR_FUNCTIONS_URL=https://YOUR_HR_PROJECT_REF.supabase.co/functions/v1
 ```
 
-Then deploy the functions (added in a later commit):
+`INTEGRATION_SHARED_SECRET` authenticates calls between this app and the
+separate HR application (see `docs/requirements/02-*.md` / `03-*.md`) — set
+identically in both projects, never exposed to the frontend.
+
+Then deploy the functions:
 
 ```bash
 supabase functions deploy resolve-link
 supabase functions deploy submit-application
 supabase functions deploy parse-resume
 supabase functions deploy send-email
+supabase functions deploy application-decision
+supabase functions deploy resubmit-application
+supabase functions deploy integration-verification-status   # inbound from HR
+supabase functions deploy integration-get-document-url       # inbound from HR
 ```
 
 ## 7. Frontend env
