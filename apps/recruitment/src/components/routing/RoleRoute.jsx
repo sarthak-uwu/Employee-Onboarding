@@ -11,7 +11,7 @@ export default function RoleRoute({ allow, children }) {
 
   if (!role) return <Navigate to="/" replace />;
   if (allow && role !== allow) {
-    const home = role === 'ta' ? '/ta' : role === 'hr' ? '/hr' : '/candidate';
+    const home = role === 'ta' ? '/ta' : '/candidate';
     return <Navigate to={home} replace />;
   }
   return children;

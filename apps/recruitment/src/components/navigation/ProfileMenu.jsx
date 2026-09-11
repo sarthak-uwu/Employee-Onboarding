@@ -4,15 +4,14 @@ import Icon from '../common/Icon.jsx';
 import { useApp } from '../../context/AppContext.jsx';
 import { ROLES, ROLE_META, DEMO_USERS } from '../../constants/roles.js';
 
-const ROLE_ORDER = [ROLES.CANDIDATE, ROLES.TA, ROLES.HR];
+const ROLE_ORDER = [ROLES.CANDIDATE, ROLES.TA];
 const ROLE_TITLE = {
   [ROLES.CANDIDATE]: 'Candidate',
   [ROLES.TA]: 'Talent Acquisition',
-  [ROLES.HR]: 'Human Resources',
 };
 
-/* Top-right account button shared by all three portals. Opens a menu to jump
-   between the Candidate / TA / HR views (the demo is one flow across roles) and
+/* Top-right account button shared by both portals. Opens a menu to jump
+   between the Candidate / TA views (the offline demo is one flow across roles) and
    to restart the demo. `links` adds portal-specific rows above the switcher. */
 export default function ProfileMenu({ role, links = [] }) {
   const navigate = useNavigate();

@@ -7,7 +7,6 @@ function LegacyJobRedirect() {
 
 import CandidateLayout from '../layouts/CandidateLayout.jsx';
 import TALayout from '../layouts/TALayout.jsx';
-import HRLayout from '../layouts/HRLayout.jsx';
 import RoleRoute from '../components/routing/RoleRoute.jsx';
 
 import LoginPage from '../pages/LoginPage.jsx';
@@ -29,12 +28,6 @@ import TAOffersPage from '../pages/talentAcquisition/TAOffersPage.jsx';
 import TAJobsPage from '../pages/talentAcquisition/TAJobsPage.jsx';
 import TAJobDetailPage from '../pages/talentAcquisition/TAJobDetailPage.jsx';
 import TAActivityPage from '../pages/talentAcquisition/TAActivityPage.jsx';
-
-import HRDashboard from '../pages/hr/HRDashboard.jsx';
-import HRCandidatesPage from '../pages/hr/HRCandidatesPage.jsx';
-import HRCandidateDetailPage from '../pages/hr/HRCandidateDetailPage.jsx';
-import HREmployeesPage from '../pages/hr/HREmployeesPage.jsx';
-import HRActivityPage from '../pages/hr/HRActivityPage.jsx';
 
 import SettingsPage from '../pages/shared/SettingsPage.jsx';
 import ProfilePage from '../pages/shared/ProfilePage.jsx';
@@ -87,24 +80,10 @@ export default function AppRoutes() {
         <Route path="/ta/profile" element={<ProfilePage role="ta" />} />
       </Route>
 
-      {/* HR */}
-      <Route
-        element={
-          <RoleRoute allow="hr">
-            <HRLayout />
-          </RoleRoute>
-        }
-      >
-        <Route path="/hr" element={<HRDashboard />} />
-        <Route path="/hr/candidates" element={<HRCandidatesPage />} />
-        <Route path="/hr/candidates/:candidateId" element={<HRCandidateDetailPage />} />
-        {/* Offers are folded into the Candidates area now. */}
-        <Route path="/hr/offers" element={<Navigate to="/hr/candidates" replace />} />
-        <Route path="/hr/employees" element={<HREmployeesPage />} />
-        <Route path="/hr/activity" element={<HRActivityPage />} />
-        <Route path="/hr/settings" element={<SettingsPage />} />
-        <Route path="/hr/profile" element={<ProfilePage role="hr" />} />
-      </Route>
+      {/* HR now lives in the separate apps/hr application — see
+          docs/requirements/02-two-application-architecture.md. An 'hr' role
+          reaching this app (it shouldn't — HR staff sign in on the HR app's
+          own Supabase project) is handled by LoginPage, not routed here. */}
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

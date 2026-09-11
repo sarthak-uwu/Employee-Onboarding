@@ -22,20 +22,17 @@ const JOURNEY = [
   { label: 'Employee', icon: 'UserRound', desc: 'Grow together', c: '#2dd4bf', c2: '#0d9488' },
 ];
 
-/* No backend — infer the internal role from the username so the customer isn't
-   asked to pick one. Routing / guards / session are unchanged. */
-function roleFromUser(username) {
-  const u = username.toLowerCase();
-  if (/(^|[._-])(ta|talent|recruit)/.test(u)) return ROLES.TA;
-  return ROLES.HR;
+/* Offline demo only — this app has one internal role (TA). */
+function roleFromUser() {
+  return ROLES.TA;
 }
 
 export default function LoginPage() {
   const navigate = useNavigate();
   const { setRole } = useApp();
-  const { configured, role, loading: authLoading, signInWithGoogle } = useAuth();
+  const { configured, role, loading: authLoading, signInWithGoogle, signOut } = useAuth();
 
-  const [username, setUsername] = useState('hr');
+  const [username, setUsername] = useState('ta');
   const [password, setPassword] = useState('ccentrik');
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState('');
@@ -45,6 +42,18 @@ export default function LoginPage() {
   if (configured) {
     if (authLoading) {
       return <div className="wsauth" style={{ placeItems: 'center' }}><span className="wsauth__spinner" /></div>;
+    }
+    // HR accounts belong to the separate HR application's own Supabase
+    // project — one shouldn't exist here, but never loop-redirect if it does.
+    if (role === ROLES.HR) {
+      return (
+        <div className="wsauth" style={{ placeItems: 'center', textAlign: 'center', padding: 24 }}>
+          <div>
+            <p>This account is an HR account. Please use the HR application instead.</p>
+            <button type="button" className="wsauth__forgot" onClick={() => signOut()}>Sign out</button>
+          </div>
+        </div>
+      );
     }
     if (role) return <Navigate to={homeForRole(role)} replace />;
   }
@@ -61,7 +70,7 @@ export default function LoginPage() {
       return; // browser redirects to Google
     }
     // not configured -> keep the offline demo behaviour
-    demoSignIn(ROLES.HR);
+    demoSignIn(ROLES.TA);
   };
 
   const demoSignIn = (r) => {
@@ -82,7 +91,7 @@ export default function LoginPage() {
     }
     if (!username.trim()) { setError('Enter your username.'); return; }
     if (!password) { setError('Enter your password.'); return; }
-    demoSignIn(roleFromUser(username.trim()));
+    demoSignIn(roleFromUser());
   };
 
   return (

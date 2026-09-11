@@ -7,7 +7,6 @@ import { ROLES, ROLE_META } from '../../constants/roles.js';
 const OPTS = [
   { role: ROLES.CANDIDATE, icon: 'UserRound', color: 'var(--tf-indigo)' },
   { role: ROLES.TA, icon: 'Users', color: 'var(--tf-violet)' },
-  { role: ROLES.HR, icon: 'UserRoundCheck', color: 'var(--tf-teal)' },
 ];
 
 export default function RoleSwitcher({ compact }) {

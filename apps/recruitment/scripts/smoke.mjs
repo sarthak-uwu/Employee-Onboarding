@@ -58,14 +58,12 @@ const routes = [
   '/ta', '/ta/candidates', '/ta/candidates/CAN-2026-000120',
   '/ta/interviews', '/ta/documents', '/ta/offers', '/ta/jobs', '/ta/activity',
   '/ta/settings', '/ta/profile',
-  '/hr', '/hr/candidates', '/hr/candidates/CAN-2026-000122', '/hr/offers',
-  '/hr/employees', '/hr/activity',
 ];
 
 // seed role so guarded routes render
 let fails = 0;
 for (const path of routes) {
-  store.set('talentflow.role.v3', JSON.stringify(path.startsWith('/hr') ? 'hr' : path.startsWith('/ta') ? 'ta' : 'candidate'));
+  store.set('talentflow.role.v3', JSON.stringify(path.startsWith('/ta') ? 'ta' : 'candidate'));
   try {
     renderToString(React.createElement(Router, { location: path }, React.createElement(Root)));
     console.log('  ok  ', path);
