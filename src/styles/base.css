@@ -1,12 +1,13 @@
 /* Small generic utilities + toast/notification-dropdown styles the ported
-   components (ToastContainer, NotificationBell, ProfileMenu, generic Card/
-   Profile pages) need, expressed against hr.css's own --hr-*/--tag-* tokens
-   rather than pulling in a second design system. */
+   components (ToastContainer, NotificationBell, ProfileMenu, generic Card,
+   Profile page) need, expressed against hr.css's own design tokens rather
+   than pulling in a second design system. */
 
 @keyframes pop { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: scale(1); } }
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
 
 .overlay { position: fixed; inset: 0; background: rgba(24, 24, 27, 0.4); z-index: 38; animation: fade 0.14s ease; }
+.hr-loading { padding: 48px 0; text-align: center; color: var(--hr-text-soft); font-size: 13px; }
 
 .grow { flex: 1; min-width: 0; }
 .pos-rel { position: relative; }
