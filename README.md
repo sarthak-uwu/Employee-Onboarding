@@ -2,35 +2,38 @@
 
 Two independent applications connected through a controlled integration layer.
 See [`docs/requirements/02-two-application-architecture.md`](docs/requirements/02-two-application-architecture.md)
+and [`03-recruitment-hr-integration.md`](docs/requirements/03-recruitment-hr-integration.md)
 for the full architecture and integration contract.
 
 ```
 apps/
-  recruitment/   Application 1 — Candidate + Talent Acquisition
-  hr/             Application 2 — HR (onboarding onward)
+  recruitment/   Application 1 — Candidate + Talent Acquisition (this repo)
+  hr/             Application 2 — HR. Its OWN git repository:
+                  https://github.com/ccentrikhrapp/onboardingapp
+                  (kept on disk here too, at apps/hr/, purely for convenience
+                  while developing both side by side — this repo does not
+                  track it; see apps/hr/'s own README there)
 ```
 
 Each app has its own `package.json`, its own Supabase project (own database,
-auth, storage, edge functions), its own env vars, and its own README with
-setup steps. Neither app imports code from the other or talks to the other's
-database directly — see the integration contract for how they communicate.
-
-This is an npm-workspaces monorepo purely for local convenience (one
-`npm install` hoists both apps' dependencies). Nothing assumes a shared repo —
-either app folder can be extracted into its own git repository later without
-code changes.
+auth, storage, edge functions), and its own env vars. Neither app imports code
+from the other or talks to the other's database directly — see the
+integration contract for how they communicate (shared-secret edge function
+calls only).
 
 ## Getting started
 
 ```bash
-npm install                 # installs both apps' dependencies
+npm install                 # installs the recruitment app's dependencies
 npm run recruitment         # starts the Candidate/TA app (apps/recruitment)
-npm run hr                  # starts the HR app (apps/hr)
 ```
 
-See each app's README for its own scripts, tests and backend setup
-(`apps/recruitment/docs` and `apps/hr/docs` — or the shared
-[`docs/requirements/`](docs/requirements/) at the repo root for the product spec).
+For the HR app, clone it separately and follow its own README:
+`git clone https://github.com/ccentrikhrapp/onboardingapp.git apps/hr`.
+
+See [`apps/recruitment/docs/BACKEND_SETUP.md`](apps/recruitment/docs/BACKEND_SETUP.md)
+for the recruitment app's Supabase setup, and the shared
+[`docs/requirements/`](docs/requirements/) at the repo root for the product spec.
 
 ## Requirements
 
