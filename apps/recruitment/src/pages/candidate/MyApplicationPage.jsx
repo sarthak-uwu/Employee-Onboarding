@@ -177,7 +177,6 @@ function adaptRemote(a) {
   if (!a) return null;
   return {
     id: a.code,
-    candidateId: a.code,
     jobTitle: a.jobTitle,
     submittedAt: a.submittedAt,
     assignedTo: 'Talent Acquisition',
