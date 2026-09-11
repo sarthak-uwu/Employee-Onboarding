@@ -4,6 +4,7 @@ import logo from '../../assets/ccentrik-logo.png';
 
 const NAV = [
   { to: '/hr', label: 'Verification queue', icon: 'Home', end: true },
+  { to: '/hr/onboarding', label: 'Onboarding', icon: 'ClipboardCheck' },
   { to: '/hr/settings', label: 'Settings', icon: 'Settings' },
 ];
 

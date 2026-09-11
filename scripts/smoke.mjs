@@ -50,7 +50,10 @@ console.error = (...a) => {
 // No Supabase config in this harness, so guarded routes show the
 // "not configured" notice rather than a real dashboard — still a valid
 // no-crash check for routing + component wiring.
-const routes = ['/', '/hr', '/hr/applications/test-id', '/hr/settings', '/hr/profile'];
+const routes = [
+  '/', '/hr', '/hr/applications/test-id', '/hr/onboarding', '/hr/onboarding/test-id',
+  '/hr/settings', '/hr/profile',
+];
 
 let fails = 0;
 for (const path of routes) {
