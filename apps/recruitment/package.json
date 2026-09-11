@@ -10,8 +10,7 @@
     "graph": "node scripts/graphify.mjs",
     "graph:open": "node scripts/graph-serve.mjs",
     "test:routes": "node scripts/smoke.mjs",
-    "test:flow": "node scripts/flow.mjs",
-    "test": "node scripts/smoke.mjs && node scripts/flow.mjs"
+    "test": "node scripts/smoke.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.116.0",

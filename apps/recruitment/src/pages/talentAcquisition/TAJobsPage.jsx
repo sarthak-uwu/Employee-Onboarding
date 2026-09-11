@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Icon from '../../components/common/Icon.jsx';
 import TAHeader from '../../components/ta/TAHeader.jsx';
@@ -10,6 +10,7 @@ import CreateJobDrawer from '../../components/workflow/CreateJobDrawer.jsx';
 import { useApp } from '../../context/AppContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { useCollectionView } from '../../hooks/useCollectionView.js';
+import { listApplications } from '../../api/applications.js';
 import { formatDate } from '../../utils/format.js';
 
 const COLUMNS = [
@@ -37,14 +38,24 @@ const APPLICANTS = {
 export default function TAJobsPage() {
   const navigate = useNavigate();
   const toast = useToast();
-  const { data, jobs, createJob } = useApp();
+  const { jobs, createJob } = useApp();
   const [open, setOpen] = useState(false);
+  const [appsByJob, setAppsByJob] = useState({});
 
-  const rows = useMemo(() => {
-    const counts = {};
-    (data.applications || []).forEach((a) => { if (a.jobId) counts[a.jobId] = (counts[a.jobId] || 0) + 1; });
-    return jobs.map((j) => ({ ...j, applicants: counts[j.id] || 0 }));
-  }, [data.applications, jobs]);
+  useEffect(() => {
+    listApplications()
+      .then((list) => {
+        const counts = {};
+        (list || []).forEach((a) => { if (a.job_id) counts[a.job_id] = (counts[a.job_id] || 0) + 1; });
+        setAppsByJob(counts);
+      })
+      .catch(() => setAppsByJob({}));
+  }, []);
+
+  const rows = useMemo(
+    () => jobs.map((j) => ({ ...j, applicants: appsByJob[j.id] || 0 })),
+    [jobs, appsByJob]
+  );
 
   const view = useCollectionView(rows, {
     searchFields: ['title', 'department', 'id', 'location'],

@@ -1,27 +1,35 @@
 import { Card, InfoList } from '../../components/common/Card.jsx';
-import { DEMO_USERS, ROLE_META, ROLES } from '../../constants/roles.js';
+import { useApp } from '../../context/AppContext.jsx';
+import { ROLE_META } from '../../constants/roles.js';
 
 export default function ProfilePage({ role }) {
-  const user = DEMO_USERS[role];
+  const { profile } = useApp();
   const meta = ROLE_META[role];
+  const name = profile?.full_name || profile?.email || 'Account';
+  const initials = name
+    .split(/[\s@.]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((s) => s[0].toUpperCase())
+    .join('');
+
   return (
     <div className="page-body" style={{ maxWidth: 640 }}>
       <h1 className="page-title mb-4">Profile</h1>
       <Card>
         <div className="row gap-4 mb-4">
           <span className="avatar" style={{ width: 56, height: 56, fontSize: 18 }}>
-            {user.initials}
+            {initials}
           </span>
           <div>
-            <div className="section-title">{user.name}</div>
+            <div className="section-title">{name}</div>
             <div className="text-secondary text-small">{meta.label}</div>
           </div>
         </div>
         <InfoList
           items={[
-            { label: 'User ID', value: user.id },
+            { label: 'Email', value: profile?.email },
             { label: 'Role', value: meta.label },
-            { label: 'Access', value: role === ROLES.TA ? 'Applications, Interviews, Documents, Offers' : 'Offers, Documents, Employees' },
             { label: 'Responsibilities', value: meta.description },
           ]}
         />

@@ -7,10 +7,8 @@ import KpiCard from '../../components/ta/KpiCard.jsx';
 import DonutChart from '../../components/ta/DonutChart.jsx';
 import FunnelChart from '../../components/ta/FunnelChart.jsx';
 import { useApp } from '../../context/AppContext.jsx';
-import { useAuth } from '../../context/AuthContext.jsx';
 import { listApplications, listRecentEvents } from '../../api/applications.js';
 import { applicationFromDb } from '../../api/mappers.js';
-import { DEMO_USERS, ROLES } from '../../constants/roles.js';
 import {
   APP_STATUS,
   ROUND_STATUS,
@@ -19,7 +17,6 @@ import {
 } from '../../constants/statuses.js';
 import { countInWindow, trendPercent, groupCounts, noticePeriodDays } from '../../utils/metrics.js';
 import { timeAgo } from '../../utils/format.js';
-import { mergeConsecutive } from '../../utils/activity.js';
 
 /* Activity entries that come from the candidate's own actions — these are the
    "something changed, take a look" updates the TA shouldn't have to hunt for. */
@@ -75,15 +72,12 @@ const SOON_THRESHOLD_DAYS = 15;
 
 export default function TADashboard() {
   const navigate = useNavigate();
-  const { data, jobs } = useApp();
-  const { configured } = useAuth();
-  const user = DEMO_USERS[ROLES.TA];
+  const { jobs, profile } = useApp();
   const [period, setPeriod] = useState('all');
   const [updatesOpen, setUpdatesOpen] = useState(false);
   const [remote, setRemote] = useState({ apps: null, events: [] });
 
   useEffect(() => {
-    if (!configured) return;
     Promise.all([listApplications(), listRecentEvents()])
       .then(([list, events]) => {
         const apps = (list || []).map(applicationFromDb).map((a) => ({
@@ -99,36 +93,23 @@ export default function TADashboard() {
         setRemote({ apps, events: events || [] });
       })
       .catch(() => setRemote({ apps: [], events: [] }));
-  }, [configured]);
+  }, []);
 
   // ----- DATA -----
-  const apps = configured ? remote.apps || [] : data.applications || [];
-  const interviews = configured ? [] : data.interviews || [];
-  const offers = configured ? [] : data.offers || [];
-  const activities = configured
-    ? remote.events.map((e) => ({
-        id: e.id,
-        applicationId: e.application_id,
-        title: e.title,
-        at: e.created_at,
-        candidateId: e.application_id,
-        who: `${e.applications?.candidates?.first_name || ''} ${e.applications?.candidates?.last_name || ''}`.trim() || 'Candidate',
-      }))
-    : data.activities || [];
+  const apps = remote.apps || [];
+  const interviews = []; // not built yet
+  const offers = []; // not built yet
+  const activities = remote.events.map((e) => ({
+    id: e.id,
+    applicationId: e.application_id,
+    title: e.title,
+    at: e.created_at,
+    candidateId: e.application_id,
+    who: `${e.applications?.candidates?.first_name || ''} ${e.applications?.candidates?.last_name || ''}`.trim() || 'Candidate',
+  }));
 
   // Candidate-driven updates, newest first, resolved to a clickable candidate.
-  const appById = new Map(apps.map((a) => [a.id, a]));
-  const candidateUpdates = configured
-    ? activities.filter((a) => CANDIDATE_UPDATE_TITLES.has(a.title)).slice(0, 6)
-    : mergeConsecutive(
-        activities.filter((a) => CANDIDATE_UPDATE_TITLES.has(a.title) && appById.has(a.applicationId)),
-        ['Document Uploaded', 'Document Not Provided'],
-      )
-        .slice(0, 6)
-        .map((a) => {
-          const app = appById.get(a.applicationId);
-          return { ...a, candidateId: app.candidateId, who: `${app.personal.firstName} ${app.personal.lastName}` };
-        });
+  const candidateUpdates = activities.filter((a) => CANDIDATE_UPDATE_TITLES.has(a.title)).slice(0, 6);
 
   // ----- FILTERING -----
   // Applications inside the selected time period (used by the pipeline + source chart).
@@ -213,7 +194,7 @@ export default function TADashboard() {
 
   return (
     <>
-      <TAHeader title="Dashboard" subtitle={`Welcome back, ${user.name}`} />
+      <TAHeader title="Dashboard" subtitle={`Welcome back, ${profile?.full_name || profile?.email || ''}`} />
 
       <div className="ta-kpi-row">
         {kpis.map((k) => <KpiCard key={k.label} {...k} />)}
@@ -227,7 +208,6 @@ export default function TADashboard() {
               <span className="ta-updates__count">{candidateUpdates.length}</span>
             </span>
             <span className="ta-updates__toggle">
-              <span className="ta-link" role="link" onClick={(e) => { e.stopPropagation(); navigate('/ta/activity'); }}>View all</span>
               <Icon name={updatesOpen ? 'ChevronUp' : 'ChevronDown'} size={16} />
             </span>
           </button>

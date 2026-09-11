@@ -1,5 +1,4 @@
 import Icon from '../common/Icon.jsx';
-import GlobalSearch from './GlobalSearch.jsx';
 import NotificationBell from './NotificationBell.jsx';
 import ProfileMenu from './ProfileMenu.jsx';
 import { ROLES } from '../../constants/roles.js';
@@ -22,7 +21,6 @@ export default function TATopbar({ head, onMenu }) {
         {head?.subtitle && <p className="ta-topbar__sub">{head.subtitle}</p>}
       </div>
 
-      <GlobalSearch base="/ta" variant="ta" />
       <NotificationBell role={ROLES.TA} variant="ta" />
       <ProfileMenu role={ROLES.TA} links={[{ label: 'Profile & settings', icon: 'Settings', to: '/ta/settings' }]} />
     </header>

@@ -1,20 +1,25 @@
-# Ccentrik — Recruitment & Onboarding (Frontend Prototype)
+# Ccentrik — Recruitment (Candidate + Talent Acquisition)
 
-A fully interactive **frontend-only** prototype of an enterprise HR recruitment and
-employee-onboarding platform. There is **no backend, no database and no API** — every
-workflow action runs in the browser against mock data and is persisted to
-`localStorage`.
+Application 1 of the C-Centrik platform. A real backend (Supabase — Postgres,
+Auth, Storage, edge functions) — no mock data, no offline demo mode. HR is a
+completely separate application (see the repo root's
+[`docs/requirements/`](../../docs/requirements/)) reached only through a
+secured integration layer.
 
-Built with **React + Vite + React Router + Lucide**. The **Talent Acquisition** and
-**Candidate** areas share a premium light UI (`src/styles/ta.css`,
-`src/components/ta/`); the HR area still uses the original SAP-inspired design system.
+Built with **React + Vite + React Router + Lucide**.
 
 ## Getting started
 
 ```bash
 npm install
-npm run dev        # http://localhost:5173
+cp .env.example .env   # fill in your Supabase project's URL + anon key
+npm run dev             # http://localhost:5173
 ```
+
+Without a configured backend the app still runs and renders — every page
+shows a clear "backend not configured" state instead of falling back to fake
+data. See [`docs/BACKEND_SETUP.md`](docs/BACKEND_SETUP.md) for the one-time
+Supabase project setup (schema, RLS, edge functions, Google OAuth, SMTP).
 
 Other scripts:
 
@@ -23,83 +28,60 @@ Other scripts:
 | `npm run build` | Production build |
 | `npm run preview` | Serve the production build |
 | `npm run test:routes` | SSR-renders every route and reports crashes |
-| `npm run test:flow` | Drives the full acceptance workflow through the real reducers |
-| `npm test` | Runs both test suites |
 | `npm run graph` | Regenerate the code map in `graph/` (`GRAPH.md` + data) |
 | `npm run graph:open` | Serve `graph/index.html` (force-directed code map) and open it |
 
 ## Roles
 
-At `/login` pick a role — this is a pure frontend simulation, no auth:
+Sign in with Google at `/`. Roles are set server-side (via the `staff_invites`
+allowlist in the database) and cannot be changed from the client:
 
-- **Candidate** — browse jobs, apply, upload a resume (with simulated auto-fill),
-  track the application, upload documents, accept/decline the offer.
-- **Talent Acquisition** — review applications (approve / return / reject), schedule
-  and grade multiple interview rounds, verify documents, prepare offers.
-- **HR** — approve or return offers, verify documents, confirm joining and create the
-  employee record.
+- **Candidate** — the default role for any new sign-in. Browse jobs, apply
+  (real résumé upload + server-side parsing), track the application, respond
+  to TA update requests.
+- **Talent Acquisition** — assigned/reviews applications, advances / requests
+  updates / closes them, manages jobs and per-TA application links.
 
-Use the top-bar log-out icon (or the people icon in the candidate header) to switch roles.
-
-## End-to-end flow
+## End-to-end flow (implemented so far)
 
 ```
-Candidate applies  →  Candidate ID + Application ID generated
-      → TA review (approve)
-      → Interview rounds (schedule → record Pass/Fail/Hold)
-      → Document verification (candidate uploads → TA/HR verify/reject)
-      → Offer prepared by TA
-      → HR approves → offer issued
-      → Candidate accepts → Joining pending
-      → HR marks joining complete → Employee ID generated
+Candidate applies (direct or via a TA link)
+      → real application row created, TA notified + candidate emailed
+      → TA reviews: Advance / Request Update / Close
+      → candidate notified + emailed; a "Request Update" creates a new,
+        versioned resubmission when the candidate acts on it
 ```
 
-Every transition writes an entry to the activity timeline and (where relevant) a
-notification and a toast. `npm run test:flow` exercises all 21 steps of this flow.
+Interviews, pre-offer document verification, offers and onboarding are the
+next phases — see [`docs/requirements/`](../../docs/requirements/) at the repo
+root for the full specification and current status.
 
 ## Project structure
 
 ```
 src/
+├── api/              centralized Supabase calls — client, jobs, applications,
+│                     applicationLinks, resumes, notifications, mappers
 ├── components/
-│   ├── common/       Button, Field, Modal/Drawer, Table, Badge, Timeline, Stepper, …
-│   ├── ta/           premium TA UI kit — Card, DataGrid, KpiCard, DonutChart,
+│   ├── common/       Icon, Button, Modal, Table, Badge, …
+│   ├── ta/           premium UI kit — Card, DataGrid, KpiCard, DonutChart,
 │   │                 FunnelChart, Tag, Toolbar, Pager, TAHeader, …
-│   ├── navigation/    Sidebar, Topbar, TASidebar, TATopbar, GlobalSearch, …
+│   ├── navigation/    CandidateHeader, TASidebar, TATopbar, NotificationBell, ProfileMenu
 │   ├── routing/       RoleRoute guard
-│   ├── workflow/      CandidateProfile, ScheduleInterviewModal, InterviewResultModal,
-│   │                  OfferDrawer, DocumentTable, ReasonModal
-│   └── JobCard.jsx
-├── context/          AppContext (all state + workflow actions), ToastContext
-├── constants/        statuses.js (central status registry), roles.js
-├── data/             jobs.js, seed.js (mock candidates/interviews/offers + a
-│                     deterministic generator that fills the pipeline)
-├── hooks/            useLocalStorage, useCollectionView (search/filter/sort/paginate)
-├── layouts/          CandidateLayout, TALayout, HRLayout
-├── pages/            candidate/ · talentAcquisition/ · hr/ · shared/
+│   └── workflow/      CreateJobDrawer, ReasonModal
+├── context/          AuthContext (Supabase session -> profile -> role),
+│                     AppContext (jobs + thin passthrough), ToastContext
+├── constants/        statuses.js (status registry), roles.js
+├── hooks/            useLocalStorage (apply-form draft only), useCollectionView
+├── layouts/          CandidateLayout, TALayout
+├── pages/            candidate/ · talentAcquisition/ · shared/
 ├── routes/           AppRoutes.jsx
-├── styles/           ta.css (premium TA design layer, scoped under .ta-shell)
-└── utils/            ids.js, format.js, metrics.js, resumeParser.js (all frontend-only)
+├── styles/           ta.css (premium design layer)
+└── utils/            ids.js, format.js, metrics.js
+
+supabase/             migrations, RLS, seed data, edge functions
 ```
 
 `graph/` holds an offline code map — run `npm run graph:open` for the
-force-directed view, or read `graph/GRAPH.md`.
-
-## State & persistence
-
-- A single `AppContext` holds `applications`, `interviews`, `documents`, `offers`,
-  `employees`, `activities`, `notifications` and ID counters.
-- All workflow actions are pure functions over an immutable draft, then persisted to
-  `localStorage` (key `talentflow.data.v7`). Refreshing the page keeps your progress.
-- **Settings → Reset demo data** restores the original seed.
-
-## Notes on the simulation
-
-- **Resume parsing** (`utils/resumeParser.js`) is a frontend mock — it returns a
-  plausible profile and marks the fields it "extracted"; there is no OCR/AI service.
-- **File uploads** use a real file picker but only file metadata (name, size, type) is
-  stored — nothing is uploaded anywhere.
-- **Offer letter download / document preview** show a toast; there are no real files.
-
-The architecture keeps data access behind `AppContext` selectors and actions so a real
-API can be dropped in later without rewriting the UI.
+force-directed view, or read `graph/GRAPH.md` (regenerate after structural
+changes — it's currently stale post-refactor).

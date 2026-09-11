@@ -22,12 +22,8 @@ import CandidateProfilePage from '../pages/candidate/CandidateProfilePage.jsx';
 import TADashboard from '../pages/talentAcquisition/TADashboard.jsx';
 import TACandidatesPage from '../pages/talentAcquisition/TACandidatesPage.jsx';
 import TACandidateDetailPage from '../pages/talentAcquisition/TACandidateDetailPage.jsx';
-import TAInterviewsPage from '../pages/talentAcquisition/TAInterviewsPage.jsx';
-import TADocumentsPage from '../pages/talentAcquisition/TADocumentsPage.jsx';
-import TAOffersPage from '../pages/talentAcquisition/TAOffersPage.jsx';
 import TAJobsPage from '../pages/talentAcquisition/TAJobsPage.jsx';
 import TAJobDetailPage from '../pages/talentAcquisition/TAJobDetailPage.jsx';
-import TAActivityPage from '../pages/talentAcquisition/TAActivityPage.jsx';
 
 import SettingsPage from '../pages/shared/SettingsPage.jsx';
 import ProfilePage from '../pages/shared/ProfilePage.jsx';
@@ -70,12 +66,8 @@ export default function AppRoutes() {
         <Route path="/ta/applications" element={<Navigate to="/ta/candidates" replace />} />
         <Route path="/ta/candidates" element={<TACandidatesPage />} />
         <Route path="/ta/candidates/:candidateId" element={<TACandidateDetailPage />} />
-        <Route path="/ta/interviews" element={<TAInterviewsPage />} />
-        <Route path="/ta/documents" element={<TADocumentsPage />} />
-        <Route path="/ta/offers" element={<TAOffersPage />} />
         <Route path="/ta/jobs" element={<TAJobsPage />} />
         <Route path="/ta/jobs/:jobId" element={<TAJobDetailPage />} />
-        <Route path="/ta/activity" element={<TAActivityPage />} />
         <Route path="/ta/settings" element={<SettingsPage />} />
         <Route path="/ta/profile" element={<ProfilePage role="ta" />} />
       </Route>

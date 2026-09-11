@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import Icon from '../common/Icon.jsx';
-import { useApp } from '../../context/AppContext.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { timeAgo } from '../../utils/format.js';
 import {
@@ -10,18 +9,17 @@ import {
 } from '../../api/notifications.js';
 import { notificationFromDb } from '../../api/mappers.js';
 
-export default function NotificationBell({ role, variant }) {
+export default function NotificationBell({ variant }) {
   const { configured } = useAuth();
-  const { notificationsFor, markNotificationsRead } = useApp();
   const [open, setOpen] = useState(false);
-  const [remote, setRemote] = useState([]);
+  const [items, setItems] = useState([]);
 
   useEffect(() => {
     if (!configured) return undefined;
     let active = true;
     const load = () =>
       listNotifications()
-        .then((rows) => active && setRemote((rows || []).map(notificationFromDb)))
+        .then((rows) => active && setItems((rows || []).map(notificationFromDb)))
         .catch(() => {});
     load();
     const unsub = subscribeNotifications(load);
@@ -31,7 +29,6 @@ export default function NotificationBell({ role, variant }) {
     };
   }, [configured]);
 
-  const items = configured ? remote : notificationsFor(role);
   const unread = items.filter((n) => !n.read).length;
   const btnClass = variant === 'ta' ? 'ta-iconbtn' : 'icon-btn';
   const dotClass = variant === 'ta' ? 'ta-iconbtn__dot' : 'badge-count';
@@ -39,11 +36,7 @@ export default function NotificationBell({ role, variant }) {
   const openAndRead = () => {
     setOpen((o) => !o);
     if (!open && unread) {
-      if (configured) {
-        markAllRead().then(() => setRemote((rs) => rs.map((n) => ({ ...n, read: true }))));
-      } else {
-        markNotificationsRead(role);
-      }
+      markAllRead().then(() => setItems((rs) => rs.map((n) => ({ ...n, read: true }))));
     }
   };
 

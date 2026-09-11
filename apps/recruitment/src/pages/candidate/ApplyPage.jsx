@@ -7,7 +7,6 @@ import { Field, FieldGrid, Input, Select, Textarea } from '../../components/ta/F
 import { useApp } from '../../context/AppContext.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
-import { simulateResumeParse, ANALYZE_STEPS } from '../../utils/resumeParser.js';
 import { loadJSON, saveJSON } from '../../hooks/useLocalStorage.js';
 import { uid } from '../../utils/ids.js';
 import { resolveLink } from '../../api/applicationLinks.js';
@@ -22,6 +21,8 @@ const phoneRe = /^[+]?[\d\s()-]{8,}$/;
 const EXP_OPTIONS = ['Fresher', '0–2 years', '2–5 years', '5–8 years', '8+ years'];
 const NOTICE_OPTIONS = ['Immediate', '15 Days', '30 Days', '60 Days', '90 Days'];
 const SOURCE_OPTIONS = ['Job Board', 'Referral', 'Social', 'Direct'];
+/* Steps shown while the resume is uploading + being parsed server-side. */
+const ANALYZE_STEPS = ['Uploading resume', 'Extracting text', 'Reading details', 'Populating your application'];
 
 function expBucket(y) {
   const n = Number(y) || 0;
@@ -58,7 +59,7 @@ export default function ApplyPage() {
   const refToken = sp.get('ref');
 
   const navigate = useNavigate();
-  const { submitApplication, getJob } = useApp();
+  const { getJob } = useApp();
   const { configured, user, signInWithGoogle } = useAuth();
   const toast = useToast();
 
@@ -73,6 +74,16 @@ export default function ApplyPage() {
       .then(setLink)
       .catch((e) => setLinkError(e.message || 'This application link is not valid.'));
   }, [refToken, configured]);
+
+  if (!configured) {
+    return (
+      <div className="cx-page cx-page--form">
+        <div className="wsauth__alert" role="alert">
+          <Icon name="AlertCircle" size={15} /> Backend not configured yet — see .env.example.
+        </div>
+      </div>
+    );
+  }
 
   const job = link ? jobFromDb(link.job) : jobId ? getJob(jobId) : null;
   const needsSignIn = configured && !user;
@@ -147,24 +158,6 @@ export default function ApplyPage() {
     }
     setErrors((e) => ({ ...e, resume: undefined }));
 
-    // Offline demo path — simulated parse, no upload.
-    if (!configured) {
-      const meta = { name: file.name, size: file.size, type: file.type, uploadedAt: new Date().toISOString() };
-      set({ resume: meta });
-      timers.current.forEach(clearTimeout);
-      timers.current = [];
-      setAnalyzeIdx(0);
-      ANALYZE_STEPS.forEach((_, i) => timers.current.push(setTimeout(() => setAnalyzeIdx(i + 1), (i + 1) * 380)));
-      timers.current.push(
-        setTimeout(() => {
-          applyParsed(simulateResumeParse(meta.name));
-          toast.success('Resume details extracted — review each field before submitting.');
-        }, ANALYZE_STEPS.length * 380 + 200)
-      );
-      return;
-    }
-
-    // Real path — upload to secure storage, then server-side parse.
     try {
       setAnalyzeIdx(0);
       const { path, meta } = await uploadResume(file);
@@ -231,18 +224,6 @@ export default function ApplyPage() {
     }
     setSubmitting(true);
 
-    // Offline demo path
-    if (!configured) {
-      setTimeout(() => {
-        const result = submitApplication({ ...buildPayload(), jobId: form.jobId, source: form.source || 'Direct', resume: form.resume });
-        saveJSON(DRAFT_KEY, null);
-        setSubmitting(false);
-        navigate('/candidate/application/success', { state: { ...result, jobTitle: job ? job.title : 'General Application' } });
-      }, 900);
-      return;
-    }
-
-    // Real path — transactional edge function
     try {
       const result = await submitApplicationApi(buildPayload());
       saveJSON(DRAFT_KEY, null);

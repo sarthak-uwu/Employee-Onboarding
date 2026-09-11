@@ -5,12 +5,10 @@ import TAHeader from '../../components/ta/TAHeader.jsx';
 import DataGrid from '../../components/ta/DataGrid.jsx';
 import Toolbar from '../../components/ta/Toolbar.jsx';
 import Tag from '../../components/ta/Tag.jsx';
-import { useApp } from '../../context/AppContext.jsx';
-import { useAuth } from '../../context/AuthContext.jsx';
 import { useCollectionView } from '../../hooks/useCollectionView.js';
 import { listApplications } from '../../api/applications.js';
 import { applicationFromDb } from '../../api/mappers.js';
-import { APP_STATUS, DOC_STATUS, stageBadgeForStatus } from '../../constants/statuses.js';
+import { APP_STATUS, stageBadgeForStatus } from '../../constants/statuses.js';
 import { formatDate } from '../../utils/format.js';
 
 /* Friendly stage buckets for the filter dropdown. */
@@ -55,14 +53,10 @@ const COLUMNS = [
 
 export default function TACandidatesPage() {
   const navigate = useNavigate();
-  const { configured } = useAuth();
-  const { data, getJob, documentsFor } = useApp();
   const [sp] = useSearchParams();
-  const apps = data.applications || [];
 
   const [remoteRows, setRemoteRows] = useState(null);
   useEffect(() => {
-    if (!configured) return undefined;
     let cancelled = false;
     listApplications()
       .then((list) => {
@@ -86,37 +80,9 @@ export default function TACandidatesPage() {
       })
       .catch(() => !cancelled && setRemoteRows([]));
     return () => { cancelled = true; };
-  }, [configured]);
+  }, []);
 
-  const mockRows = useMemo(
-    () =>
-      apps.map((a) => {
-        const job = getJob(a.jobId);
-        const docs = documentsFor(a.id);
-        const verified = docs.filter((d) => d.status === DOC_STATUS.VERIFIED).length;
-        const rejected = docs.filter((d) => d.status === DOC_STATUS.REJECTED).length;
-        return {
-          id: a.id,
-          candidateId: a.candidateId,
-          name: `${a.personal.firstName} ${a.personal.lastName}`,
-          email: a.personal.email,
-          job: a.jobTitle,
-          department: job?.department || 'General',
-          experience: Number(a.professional.totalExperience) || 0,
-          source: a.source || 'Direct',
-          noticePeriod: a.professional?.noticePeriod || 'Not specified',
-          submittedAt: a.submittedAt,
-          status: a.status,
-          docs: rejected ? { tone: 'red', text: `${rejected} rejected` }
-            : docs.length && verified === docs.length ? { tone: 'green', text: 'All verified' }
-            : verified ? { tone: 'amber', text: `${verified}/${docs.length} verified` }
-            : { tone: 'grey', text: '—' },
-        };
-      }),
-    [apps, getJob, documentsFor]
-  );
-
-  const rows = configured ? remoteRows || [] : mockRows;
+  const rows = remoteRows || [];
 
   const stageParam = STAGE_GROUPS[sp.get('stage')] ? sp.get('stage') : 'all';
   const jobParam = sp.get('job') || null;

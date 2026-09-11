@@ -1,8 +1,11 @@
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Button from '../../components/ta/Button.jsx';
 import Card from '../../components/ta/Card.jsx';
 import EmptyState from '../../components/ta/EmptyState.jsx';
-import { useApp } from '../../context/AppContext.jsx';
+import { useAuth } from '../../context/AuthContext.jsx';
+import { listMyApplications } from '../../api/applications.js';
+import { applicationFromDb } from '../../api/mappers.js';
 import { initialsOf, formatCurrencyINR } from '../../utils/format.js';
 
 function Info({ label, value }) {
@@ -16,8 +19,19 @@ function Info({ label, value }) {
 
 export default function CandidateProfilePage() {
   const navigate = useNavigate();
-  const { data, getApplication } = useApp();
-  const app = data.myApplicationId ? getApplication(data.myApplicationId) : null;
+  const { configured } = useAuth();
+  const [app, setApp] = useState(undefined); // undefined = loading, null = none
+
+  useEffect(() => {
+    if (!configured) { setApp(null); return; }
+    listMyApplications()
+      .then((apps) => setApp(apps?.[0] ? applicationFromDb(apps[0]) : null))
+      .catch(() => setApp(null));
+  }, [configured]);
+
+  if (app === undefined) {
+    return <div className="cx-page cx-page--narrow"><div className="cx-loading">Loading…</div></div>;
+  }
 
   if (!app) {
     return (
@@ -34,13 +48,13 @@ export default function CandidateProfilePage() {
 
   const p = app.personal;
   const pr = app.professional;
-  const name = `${p.firstName} ${p.lastName}`;
+  const name = `${p.firstName || ''} ${p.lastName || ''}`.trim();
 
   return (
     <div className="cx-page cx-page--narrow">
       <div className="cx-page__head">
         <h1 className="cx-page__title">My profile</h1>
-        <p className="cx-page__sub">Details from your application — {app.candidateId}</p>
+        <p className="cx-page__sub">Details from your application — {app.code}</p>
       </div>
 
       <div className="ta-profile-head" style={{ marginBottom: 16 }}>
@@ -53,7 +67,7 @@ export default function CandidateProfilePage() {
         </div>
       </div>
 
-      <Card title="Contact & details" bodyStyle={{ }}>
+      <Card title="Contact & details">
         <div className="ta-info">
           <Info label="Email" value={p.email} />
           <Info label="Phone" value={p.mobile} />

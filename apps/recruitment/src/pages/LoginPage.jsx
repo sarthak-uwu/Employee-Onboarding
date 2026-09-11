@@ -1,48 +1,30 @@
 import { useState } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 import Icon from '../components/common/Icon.jsx';
-import { useApp } from '../context/AppContext.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { ROLES, ROLE_META } from '../constants/roles.js';
 import markWhite from '../assets/centrik-logo-white.png';
 import markColor from '../assets/ccentrik-logo.png';
 
-const DOMAIN = '@ccentrik.com';
-
 function homeForRole(role) {
   return ROLE_META[role]?.home || '/candidate';
 }
 
+// This app owns the recruitment journey only — onboarding and beyond live in
+// the separate HR application (docs/requirements/02-two-application-architecture.md).
 const JOURNEY = [
   { label: 'Applied', icon: 'FileText', desc: 'All in one place', c: '#60a5fa', c2: '#2563eb' },
   { label: 'Screening', icon: 'Eye', desc: 'Find the right fit', c: '#a78bfa', c2: '#7c3aed' },
   { label: 'Interview', icon: 'CalendarDays', desc: 'Coordinate with ease', c: '#f472b6', c2: '#db2777' },
   { label: 'Offer', icon: 'FileCheck', desc: 'Move forward fast', c: '#fbbf24', c2: '#f59e0b' },
-  { label: 'Onboarding', icon: 'ClipboardCheck', desc: 'Set up for success', c: '#4ade80', c2: '#16a34a' },
-  { label: 'Employee', icon: 'UserRound', desc: 'Grow together', c: '#2dd4bf', c2: '#0d9488' },
 ];
 
-/* Offline demo only — this app has one internal role (TA). */
-function roleFromUser() {
-  return ROLES.TA;
-}
-
 export default function LoginPage() {
-  const navigate = useNavigate();
-  const { setRole } = useApp();
   const { configured, role, loading: authLoading, signInWithGoogle, signOut } = useAuth();
-
-  const [username, setUsername] = useState('ta');
-  const [password, setPassword] = useState('ccentrik');
-  const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [signing, setSigning] = useState(false);
 
-  // --- real auth path ---------------------------------------------------
-  if (configured) {
-    if (authLoading) {
-      return <div className="wsauth" style={{ placeItems: 'center' }}><span className="wsauth__spinner" /></div>;
-    }
+  if (configured && !authLoading && role) {
     // HR accounts belong to the separate HR application's own Supabase
     // project — one shouldn't exist here, but never loop-redirect if it does.
     if (role === ROLES.HR) {
@@ -55,43 +37,18 @@ export default function LoginPage() {
         </div>
       );
     }
-    if (role) return <Navigate to={homeForRole(role)} replace />;
+    return <Navigate to={homeForRole(role)} replace />;
   }
 
   const googleSignIn = async () => {
-    if (configured) {
-      setError('');
-      setLoading(true);
-      const { error: oauthError } = await signInWithGoogle();
-      if (oauthError) {
-        setError(oauthError.message);
-        setLoading(false);
-      }
-      return; // browser redirects to Google
-    }
-    // not configured -> keep the offline demo behaviour
-    demoSignIn(ROLES.TA);
-  };
-
-  const demoSignIn = (r) => {
-    setLoading(true);
-    setTimeout(() => {
-      setRole(r);
-      navigate(ROLE_META[r].home);
-    }, 700);
-  };
-
-  const submit = (e) => {
-    e.preventDefault();
-    if (loading) return;
+    if (!configured || signing) return;
     setError('');
-    if (configured) {
-      setError('Use "Sign in with Google" — that is the only sign-in method.');
-      return;
+    setSigning(true);
+    const { error: oauthError } = await signInWithGoogle();
+    if (oauthError) {
+      setError(oauthError.message);
+      setSigning(false);
     }
-    if (!username.trim()) { setError('Enter your username.'); return; }
-    if (!password) { setError('Enter your password.'); return; }
-    demoSignIn(roleFromUser());
   };
 
   return (
@@ -106,16 +63,16 @@ export default function LoginPage() {
           <span className="wsfloat__body"><b>New Applicant</b><i /><i /></span>
         </figure>
         <figure className="wsfloat wsfloat--out" aria-hidden="true">
-          <span className="wsfloat__avatar"><Icon name="UserRoundCheck" size={17} /></span>
-          <span className="wsfloat__body"><b>Welcome to the team!</b></span>
+          <span className="wsfloat__avatar"><Icon name="FileCheck" size={17} /></span>
+          <span className="wsfloat__body"><b>Offer sent!</b></span>
           <span className="wsfloat__check"><Icon name="Check" size={11} /></span>
         </figure>
 
         <img className="wsauth__logo wsauth__logo--lg" src={markWhite} alt="Ccentrik" />
 
         <div className="wsauth__pitch">
-          <h1>From applicant to employee,<br /><span>one continuous workspace.</span></h1>
-          <p>Simplify hiring. Empower people. Build what&rsquo;s next.</p>
+          <h1>From application<br /><span>to offer, effortlessly.</span></h1>
+          <p>Apply, track and hire — one clear pipeline for candidates and recruiters.</p>
         </div>
 
         <span className="wsauth__tick" aria-hidden="true" />
@@ -123,11 +80,7 @@ export default function LoginPage() {
         <ol className="wsjourney" aria-hidden="true">
           <span className="wsjourney__rail"><span className="wsjourney__pulse" /></span>
           {JOURNEY.map((s, i) => (
-            <li
-              className="wsjourney__step"
-              key={s.label}
-              style={{ '--i': i, '--c': s.c, '--c2': s.c2 }}
-            >
+            <li className="wsjourney__step" key={s.label} style={{ '--i': i, '--c': s.c, '--c2': s.c2 }}>
               <span className="wsjourney__node"><Icon name={s.icon} size={19} /></span>
               <span className="wsjourney__label">{s.label}</span>
               <span className="wsjourney__desc">{s.desc}</span>
@@ -138,93 +91,44 @@ export default function LoginPage() {
           ))}
         </ol>
 
-        <p className="wsauth__tags" aria-hidden="true">People<span>·</span>Process<span>·</span>Progress</p>
+        <p className="wsauth__tags" aria-hidden="true">Candidates<span>·</span>Talent Acquisition</p>
       </aside>
 
       <main className="wsauth__main">
-        <form className="wsauth__panel" onSubmit={submit} noValidate>
+        <div className="wsauth__panel">
           <img className="wsauth__logo wsauth__logo--sm" src={markColor} alt="Ccentrik" />
-          <h2>Welcome back</h2>
-          <p className="wsauth__lede">Log in to Ccentrik Workspace</p>
+          <h2>Welcome</h2>
+          <p className="wsauth__lede">
+            Sign in to apply for a role, track your application, or manage the recruitment
+            pipeline as Talent Acquisition.
+          </p>
 
           {error && (
             <div className="wsauth__alert" role="alert">
               <Icon name="AlertCircle" size={15} /> {error}
             </div>
           )}
-
-          {configured ? (
-            <p className="wsauth__lede" style={{ marginBottom: 4 }}>
-              Sign in with your Ccentrik Google account. Your access level is set by your
-              administrator.
-            </p>
-          ) : (
-            <>
-              <label className="wsauth__field">
-                <span className="wsauth__label">Username</span>
-                <span className="wsauth__box">
-                  <input
-                    type="text"
-                    autoComplete="username"
-                    placeholder="yourname"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    aria-label="Username"
-                  />
-                  <span className="wsauth__suffix">{DOMAIN}</span>
-                </span>
-              </label>
-
-              <label className="wsauth__field">
-                <span className="wsauth__label">Password</span>
-                <span className="wsauth__box">
-                  <input
-                    type={showPw ? 'text' : 'password'}
-                    autoComplete="current-password"
-                    placeholder="Enter your password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    aria-label="Password"
-                  />
-                  <button
-                    type="button"
-                    className="wsauth__eye"
-                    onClick={() => setShowPw((v) => !v)}
-                    aria-label={showPw ? 'Hide password' : 'Show password'}
-                  >
-                    <Icon name={showPw ? 'EyeOff' : 'Eye'} size={16} />
-                  </button>
-                </span>
-              </label>
-
-              <button
-                type="button"
-                className="wsauth__forgot"
-                onClick={() => setError('Password resets are handled by your workspace administrator.')}
-              >
-                Forgot password?
-              </button>
-
-              <button type="submit" className="wsauth__submit" disabled={loading}>
-                {loading ? <><span className="wsauth__spinner" /> Signing in…</> : <>Sign in <Icon name="ArrowRight" size={16} /></>}
-              </button>
-
-              <div className="wsauth__or"><span>or</span></div>
-            </>
+          {!configured && (
+            <div className="wsauth__alert" role="alert">
+              <Icon name="AlertCircle" size={15} /> Backend not configured yet — see .env.example.
+            </div>
           )}
 
-          <button type="button" className="wsauth__google" onClick={() => !loading && googleSignIn()} disabled={loading}>
+          <button type="button" className="wsauth__google" onClick={googleSignIn} disabled={!configured || signing || authLoading}>
             <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true">
               <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.76h3.57c2.08-1.92 3.28-4.74 3.28-8.09Z" />
               <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.76c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.15-4.53H2.18v2.84A11 11 0 0 0 12 23Z" />
               <path fill="#FBBC05" d="M5.85 14.1a6.6 6.6 0 0 1 0-4.22V7.04H2.18a11 11 0 0 0 0 9.9l3.67-2.84Z" />
               <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.04l3.67 2.84C6.71 7.31 9.14 5.38 12 5.38Z" />
             </svg>
-            Sign in with Google
+            {signing ? 'Signing in…' : 'Continue with Google'}
           </button>
 
-          <p className="wsauth__foot">For internal use by the <b>Ccentrik</b> team.</p>
-        </form>
+          <p className="wsauth__foot">
+            New here? Signing in with Google creates your candidate account automatically —
+            no separate sign-up needed. Talent Acquisition access is granted by your administrator.
+          </p>
+        </div>
       </main>
     </div>
   );

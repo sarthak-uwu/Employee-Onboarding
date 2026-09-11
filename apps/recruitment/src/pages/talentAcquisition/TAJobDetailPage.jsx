@@ -10,6 +10,7 @@ import { useApp } from '../../context/AppContext.jsx';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useToast } from '../../context/ToastContext.jsx';
 import { createLink, setLinkActive } from '../../api/applicationLinks.js';
+import { listApplications } from '../../api/applications.js';
 import { APP_STATUS, stageIndexForStatus } from '../../constants/statuses.js';
 import { formatDate } from '../../utils/format.js';
 
@@ -82,14 +83,17 @@ function List({ title, items }) {
 export default function TAJobDetailPage() {
   const { jobId } = useParams();
   const navigate = useNavigate();
-  const { getJob, data } = useApp();
+  const { getJob } = useApp();
   const { configured } = useAuth();
   const job = getJob(jobId);
+  const [applicants, setApplicants] = useState([]);
 
-  const applicants = useMemo(
-    () => (data.applications || []).filter((a) => a.jobId === jobId),
-    [data.applications, jobId]
-  );
+  useEffect(() => {
+    listApplications()
+      .then((list) => setApplicants((list || []).filter((a) => a.job_id === jobId)))
+      .catch(() => setApplicants([]));
+  }, [jobId]);
+
   const breakdown = BREAKDOWN.map((b) => ({
     ...b,
     value: applicants.filter((a) => a.status !== APP_STATUS.REJECTED && stageIndexForStatus(a.status) >= b.reach).length,
