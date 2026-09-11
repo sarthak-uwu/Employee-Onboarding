@@ -35,6 +35,12 @@ leave, payroll, compensation, employee lifecycle, offboarding. Built and
 deployed independently; its modules are implemented on their own schedule, not
 forced to match recruitment's.
 
+> **Update 2026-09-11:** [`03-recruitment-hr-integration.md`](./03-recruitment-hr-integration.md)
+> refines §6 below — there are **two** integration points, not one. Pre-offer
+> document verification (before the offer can be sent) is the first; offer
+> acceptance is the second. Read `03-*` for the authoritative integration
+> contract; this file's ownership/security/repo-layout sections still stand.
+
 ## 4. The boundary — where ownership changes hands
 
 ```
